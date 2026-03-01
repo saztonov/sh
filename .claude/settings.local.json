@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install -D concurrently)"
+      "Bash(npm install -D concurrently)",
+      "Bash(npx tsc -p packages/shared/tsconfig.json --noEmit)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(npx tsc)"
     ]
   }
 }

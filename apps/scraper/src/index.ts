@@ -28,7 +28,7 @@ async function main(): Promise<void> {
     logger.warn('Scraper running in standby mode — will poll for pending runs but cannot scrape.');
   }
 
-  const { setupCronSchedule, setupPendingRunsPoller } = await import('./scheduler/cron.js');
+  const { setupCronSchedule, setupPendingRunsPoller, setupSessionValidationCron } = await import('./scheduler/cron.js');
   const { runScrape } = await import('./scraper/classroom.js');
 
   logger.info({
@@ -43,6 +43,9 @@ async function main(): Promise<void> {
   // Set up polling for pending scrape runs (triggered from web UI)
   const pollInterval = setupPendingRunsPoller();
 
+  // Set up session validation cron (2x daily)
+  const sessionValidationTask = setupSessionValidationCron();
+
   // Run an immediate scrape if --now flag is passed
   const args = process.argv.slice(2);
   if (args.includes('--now')) {
@@ -54,6 +57,7 @@ async function main(): Promise<void> {
   const shutdown = (): void => {
     logger.info('Shutting down...');
     cronTask.stop();
+    sessionValidationTask.stop();
     clearInterval(pollInterval);
     process.exit(0);
   };

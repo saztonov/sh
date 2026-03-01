@@ -20,7 +20,7 @@ export interface ScrapeRun {
   id: string;
   started_at: string;
   finished_at: string | null;
-  status: 'pending' | 'running' | 'success' | 'error';
+  status: 'pending' | 'running' | 'success' | 'error' | 'capture_session';
   assignments_found: number | null;
   assignments_new: number | null;
   error_message: string | null;

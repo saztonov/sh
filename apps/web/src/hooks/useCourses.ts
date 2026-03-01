@@ -14,6 +14,14 @@ interface ScrapeRunResponse {
   data: ScrapeRun;
 }
 
+interface SessionStatusResponse {
+  data: {
+    status: 'valid' | 'invalid' | 'no_session' | 'unknown';
+    checked_at: string | null;
+    is_capturing: boolean;
+  };
+}
+
 /**
  * Fetch all courses.
  */
@@ -79,6 +87,39 @@ export function useTriggerScrape() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scrape-runs'] });
+    },
+  });
+}
+
+/**
+ * Fetch session status.
+ */
+export function useSessionStatus() {
+  return useQuery({
+    queryKey: ['session-status'],
+    queryFn: async () => {
+      const { data } = await api.get<SessionStatusResponse>('/api/scraper/session-status');
+      return data.data;
+    },
+    staleTime: 30 * 1000,
+    refetchInterval: 15 * 1000,
+  });
+}
+
+/**
+ * Trigger session capture (opens browser for Google login).
+ */
+export function useCaptureSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<ScrapeRunResponse>('/api/scraper/capture-session');
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scrape-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['session-status'] });
     },
   });
 }

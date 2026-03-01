@@ -55,12 +55,14 @@ const ScheduleDayTable: React.FC<ScheduleDayTableProps> = ({ slots, onAssignment
     {
       title: 'Время',
       key: 'time',
-      width: 90,
+      width: 105,
       render: (_: unknown, record: MergedSlot) => {
         if (!record.timeStart || !record.timeEnd) return <Text type="secondary">—</Text>;
+        const start = record.timeStart.slice(0, 5);
+        const end = record.timeEnd.slice(0, 5);
         return (
-          <Text style={{ fontSize: 12 }}>
-            {record.timeStart}–{record.timeEnd}
+          <Text style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+            {start}–{end}
           </Text>
         );
       },
@@ -141,6 +143,7 @@ const ScheduleDayTable: React.FC<ScheduleDayTableProps> = ({ slots, onAssignment
 
   return (
     <Table<MergedSlot>
+      className="schedule-compact"
       columns={columns}
       dataSource={slots}
       rowKey="lessonNumber"

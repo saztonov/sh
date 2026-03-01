@@ -51,21 +51,16 @@ const SchedulePage: React.FC = () => {
     scrolledRef.current = false;
   }, [weekOffset]);
 
-  // Auto-collapse past days on current week
-  useEffect(() => {
-    if (weekOffset === 0 && days) {
-      const today = dayjs();
-      const pastDays = new Set<number>();
-      for (const day of days) {
-        if (dayjs(day.date).isBefore(today, 'day')) {
-          pastDays.add(day.dayOfWeek);
-        }
-      }
-      setCollapsedDays(pastDays);
+  const allExpanded = days ? collapsedDays.size === 0 : true;
+
+  const toggleCollapseAll = () => {
+    if (!days) return;
+    if (allExpanded) {
+      setCollapsedDays(new Set(days.map((d) => d.dayOfWeek)));
     } else {
       setCollapsedDays(new Set());
     }
-  }, [weekOffset, days]);
+  };
 
   const handleAssignmentClick = useCallback((assignmentId: string) => {
     setDrawerAssignmentId(assignmentId);
@@ -285,6 +280,15 @@ const SchedulePage: React.FC = () => {
             >
               <Text style={{ fontSize: 13 }}>Только с заданиями</Text>
             </Checkbox>
+            {days && days.length > 0 && (
+              <Button
+                type="link"
+                onClick={toggleCollapseAll}
+                style={{ padding: 0, fontSize: 13 }}
+              >
+                {allExpanded ? 'Свернуть все' : 'Развернуть все'}
+              </Button>
+            )}
           </Space>
         </div>
 

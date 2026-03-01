@@ -343,6 +343,7 @@ export async function runScrape(runId?: string): Promise<void> {
           for (const attachment of detail.attachments) {
             try {
               const result = await downloadAndUploadAttachment(
+                page,
                 attachment.url,
                 assignmentId,
                 attachment.name,

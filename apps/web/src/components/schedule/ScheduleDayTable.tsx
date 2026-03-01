@@ -3,7 +3,7 @@ import { Table, Tag, Switch, Space, Typography } from 'antd';
 import { CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { MergedSlot, SlotAssignment } from '@homework/shared';
-import { getSubjectColor, getDueDateStatus } from '../../lib/format';
+import { getSubjectColor, getDueDateStatus, getDueDateLabel } from '../../lib/format';
 import { useToggleCompleted } from '../../hooks/useAssignments';
 
 const { Text } = Typography;
@@ -121,6 +121,11 @@ const ScheduleDayTable: React.FC<ScheduleDayTableProps> = ({ slots, onAssignment
                 >
                   {a.title}
                 </Tag>
+                {!a.isCompleted && getDueDateStatus(a.dueDate) === 'overdue' && (
+                  <Text style={{ fontSize: 11, color: '#ff4d4f', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                    {getDueDateLabel(a.dueDate)}
+                  </Text>
+                )}
                 <Switch
                   size="small"
                   checked={a.isCompleted}

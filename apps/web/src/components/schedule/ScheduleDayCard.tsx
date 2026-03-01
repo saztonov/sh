@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, Tag, Switch, Space, Typography, List } from 'antd';
 import { CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import type { MergedSlot, SlotAssignment } from '@homework/shared';
-import { getSubjectColor, getDueDateStatus } from '../../lib/format';
+import { getSubjectColor, getDueDateStatus, getDueDateLabel } from '../../lib/format';
 import { useToggleCompleted } from '../../hooks/useAssignments';
 
 const { Text } = Typography;
@@ -107,7 +107,7 @@ const ScheduleDayCard: React.FC<ScheduleDayCardProps> = ({ slots, onAssignmentCl
                           onClick={() => onAssignmentClick(a.id)}
                           style={{
                             cursor: 'pointer',
-                            maxWidth: '70%',
+                            maxWidth: '60%',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
@@ -119,6 +119,11 @@ const ScheduleDayCard: React.FC<ScheduleDayCardProps> = ({ slots, onAssignmentCl
                         >
                           {a.title}
                         </Tag>
+                        {!a.isCompleted && getDueDateStatus(a.dueDate) === 'overdue' && (
+                          <Text style={{ fontSize: 11, color: '#ff4d4f', whiteSpace: 'nowrap' }}>
+                            {getDueDateLabel(a.dueDate)}
+                          </Text>
+                        )}
                         <Switch
                           size="small"
                           checked={a.isCompleted}

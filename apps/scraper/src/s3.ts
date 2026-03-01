@@ -7,7 +7,7 @@ const s3Config: S3ClientConfig = {
   endpoint: config.s3.endpoint,
   region: config.s3.region,
   credentials: {
-    accessKeyId: config.s3.accessKeyId,
+    accessKeyId: `${config.s3.tenantId}:${config.s3.accessKeyId}`,
     secretAccessKey: config.s3.secretAccessKey,
   },
   forcePathStyle: true,

@@ -21,8 +21,9 @@ export const config = {
   },
   s3: {
     endpoint: requireEnv('S3_ENDPOINT'),
-    region: optionalEnv('S3_REGION', 'us-east-1'),
+    region: optionalEnv('S3_REGION', 'ru-central-1'),
     bucket: requireEnv('S3_BUCKET'),
+    tenantId: requireEnv('S3_TENANT_ID'),
     accessKeyId: requireEnv('S3_ACCESS_KEY'),
     secretAccessKey: requireEnv('S3_SECRET_KEY'),
     publicUrl: optionalEnv('S3_PUBLIC_URL', ''),

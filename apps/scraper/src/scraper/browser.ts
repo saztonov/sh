@@ -108,6 +108,29 @@ export async function captureSession(): Promise<{ success: boolean; error?: stri
     const { context } = launched;
     const page = await context.newPage();
 
+    let sessionSaved = false;
+    let browserDisconnected = false;
+
+    // Track browser disconnect (user closes browser manually)
+    browser.on('disconnected', () => {
+      browserDisconnected = true;
+    });
+
+    // Eagerly save session whenever the page navigates to classroom.google.com
+    // This ensures we capture cookies even if the user closes the browser right after login
+    page.on('framenavigated', (frame) => {
+      if (frame === page.mainFrame() && frame.url().includes('classroom.google.com/u/0/')) {
+        context.storageState({ path: config.playwright.statePath })
+          .then(() => {
+            sessionSaved = true;
+            logger.info('Session saved (eager save on navigation to Classroom)');
+          })
+          .catch(() => {
+            // Context may already be closed — ignore
+          });
+      }
+    });
+
     logger.info('Navigating to Google Classroom for session capture...');
     await page.goto('https://classroom.google.com/u/0/h');
     await page.waitForLoadState('domcontentloaded');
@@ -122,39 +145,63 @@ export async function captureSession(): Promise<{ success: boolean; error?: stri
     }
 
     // Not logged in — wait for user to complete login (up to 10 minutes)
-    // Poll every 3 seconds for classroom content to appear
     logger.info('Not logged in — waiting for manual login (10 min timeout)...');
 
     const deadline = Date.now() + 600_000; // 10 minutes
-    let loggedIn = false;
+    let confirmedLoggedIn = false;
 
-    while (Date.now() < deadline) {
-      await page.waitForTimeout(3000);
+    while (Date.now() < deadline && !browserDisconnected) {
+      try {
+        await page.waitForTimeout(3000);
+      } catch {
+        // Browser was closed during waitForTimeout
+        break;
+      }
 
-      // Check if we landed on the classroom page with actual content
-      if (await isLoggedInToClassroom(page)) {
-        loggedIn = true;
+      if (browserDisconnected) break;
+
+      try {
+        if (await isLoggedInToClassroom(page)) {
+          // Save session one more time with final state
+          await saveBrowserState(context);
+          sessionSaved = true;
+          confirmedLoggedIn = true;
+          logger.info('Login confirmed, session saved');
+          break;
+        }
+      } catch {
+        // Browser was closed during check
         break;
       }
     }
 
-    if (!loggedIn) {
-      await closeBrowser(browser);
-      return { success: false, error: 'Login timeout — browser was open for 10 minutes without successful login' };
+    // Determine result
+    if (confirmedLoggedIn) {
+      if (!browserDisconnected) {
+        await closeBrowser(browser);
+      }
+      return { success: true };
     }
 
-    // Wait a bit for page to fully settle
-    await page.waitForTimeout(2000);
+    if (browserDisconnected && sessionSaved) {
+      // User closed browser, but we already saved session via framenavigated handler
+      logger.info('Browser closed by user, but session was already saved');
+      return { success: true };
+    }
 
-    logger.info('Login successful, saving session...');
-    await saveBrowserState(context);
+    if (browserDisconnected) {
+      return { success: false, error: 'Браузер был закрыт до завершения входа. Попробуйте ещё раз — после входа дождитесь, пока в консоли появится сообщение о сохранении сессии.' };
+    }
+
+    // Timeout
     await closeBrowser(browser);
-
-    return { success: true };
+    return { success: false, error: 'Login timeout — browser was open for 10 minutes without successful login' };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     logger.error({ err }, 'Session capture failed');
-    if (browser) await closeBrowser(browser);
+    if (browser) {
+      try { await closeBrowser(browser); } catch { /* already closed */ }
+    }
     return { success: false, error: errorMessage };
   }
 }

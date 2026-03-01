@@ -7,7 +7,7 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "npm run dev -w packages/shared -w apps/api -w apps/web -w apps/scraper",
+    "dev": "concurrently -n shared,api,web,scraper -c blue,green,cyan,yellow \"npm run dev -w packages/shared\" \"npm run dev -w apps/api\" \"npm run dev -w apps/web\" \"npm run dev -w apps/scraper\"",
     "dev:api": "npm run dev -w apps/api",
     "dev:web": "npm run dev -w apps/web",
     "dev:scraper": "npm run dev -w apps/scraper",
@@ -22,13 +22,14 @@
     "lint": "eslint . --ext .ts,.tsx"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0",
+    "concurrently": "^9.2.1",
     "tsx": "^4.19.0",
-    "@types/node": "^22.0.0"
+    "typescript": "^5.7.0"
   },
   "dependencies": {
-    "xlsx": "^0.18.5",
     "@supabase/supabase-js": "^2.49.0",
-    "dotenv": "^16.4.0"
+    "dotenv": "^16.4.0",
+    "xlsx": "^0.18.5"
   }
 }

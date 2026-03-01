@@ -23,6 +23,11 @@ export interface AttachmentData {
   type: string | null;
 }
 
+/** Get trimmed innerText from an element (used outside page.evaluate) */
+function elText(el: { innerText: () => Promise<string> } | null): Promise<string> {
+  return el ? el.innerText().then((t: string) => t.trim()) : Promise.resolve('');
+}
+
 /**
  * Navigate to an assignment detail page and extract all available information
  * using text-based heuristics instead of fragile CSS class selectors.
@@ -37,132 +42,105 @@ export async function fetchAssignmentDetail(
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2000);
 
-  // Extract all data in a single page.evaluate() call for reliability
+  // Extract all data in a single page.evaluate() call for reliability.
+  // IMPORTANT: Do NOT declare named functions/consts with arrow functions
+  // inside page.evaluate — esbuild injects __name() calls that don't exist
+  // in the browser context, causing ReferenceError.
   const extracted = await page.evaluate(() => {
-    // --- Helper: get visible text from an element, trimmed ---
-    const text = (el: Element | null): string =>
-      el ? (el as HTMLElement).innerText?.trim() ?? '' : '';
+    // Helper: inline getter (not a named const to avoid __name injection)
+    function gt(el: Element | null): string {
+      return el ? (el as HTMLElement).innerText?.trim() ?? '' : '';
+    }
 
-    // --- Title: look for the main assignment heading ---
-    // Google Classroom has multiple h1 elements; the page header contains
-    // the course name ("Класс > Course Name"), and the assignment title
-    // is a separate heading further down in the main content area.
+    // --- Title ---
     let title = '';
-    const allH1 = Array.from(document.querySelectorAll('h1'));
-    // Skip h1 elements that contain "Класс" (page header with course name)
-    for (const h of allH1) {
-      const t = text(h);
+    const allH1 = document.querySelectorAll('h1');
+    for (let i = 0; i < allH1.length; i++) {
+      const t = gt(allH1[i]);
       if (t && !t.startsWith('Класс')) {
         title = t;
         break;
       }
     }
 
-    // --- Author + date: find element containing "•" (bullet separator) ---
-    // Format: "Фамилия Имя • 25 февр."
+    // --- Author + date: "Фамилия Имя • 25 февр." ---
     let author: string | null = null;
     let publishedDate: string | null = null;
-    // Search within small text elements for the bullet pattern
-    const allSmallText = Array.from(document.querySelectorAll('span, div, p'));
-    for (const el of allSmallText) {
-      const t = text(el);
+    const allEls = document.querySelectorAll('span, div, p');
+    for (let i = 0; i < allEls.length; i++) {
+      const t = gt(allEls[i]);
       if (t.includes('\u2022') && t.length < 100) {
-        // Ensure this is the leaf element (not a parent containing the bullet)
-        const children = el.querySelectorAll('*');
+        // Check this is a leaf element
         let isLeaf = true;
-        for (const child of children) {
-          if (text(child).includes('\u2022')) { isLeaf = false; break; }
+        const ch = allEls[i].querySelectorAll('*');
+        for (let j = 0; j < ch.length; j++) {
+          if (gt(ch[j]).includes('\u2022')) { isLeaf = false; break; }
         }
         if (!isLeaf) continue;
 
-        const parts = t.split('\u2022').map((p) => p.trim());
-        author = parts[0] || null;
-        publishedDate = parts[1] || null;
+        const parts = t.split('\u2022');
+        author = parts[0]?.trim() || null;
+        publishedDate = parts[1]?.trim() || null;
         break;
       }
     }
 
-    // --- Points: find element containing "балл" ---
+    // --- Points: "5 баллов" ---
     let points: number | null = null;
-    for (const el of allSmallText) {
-      const t = text(el);
+    for (let i = 0; i < allEls.length; i++) {
+      const t = gt(allEls[i]);
       if (t.includes('балл') && t.length < 30) {
-        const match = t.match(/(\d+)/);
-        if (match) {
-          points = parseInt(match[1], 10);
-          break;
-        }
+        const m = t.match(/(\d+)/);
+        if (m) { points = parseInt(m[1], 10); break; }
       }
     }
 
-    // --- Due date: find "Срок сдачи:" text ---
+    // --- Due date: "Срок сдачи: Сегодня" ---
     let dueDate: string | null = null;
-    for (const el of allSmallText) {
-      const t = text(el);
+    for (let i = 0; i < allEls.length; i++) {
+      const t = gt(allEls[i]);
       if (t.startsWith('Срок сдачи') && t.length < 60) {
         dueDate = t.replace(/^Срок сдачи:?\s*/, '').trim() || null;
         break;
       }
     }
 
-    // --- Description: main content text between metadata and attachments ---
-    // Strategy: find the assignment content container.
-    // The description is typically in a div that contains paragraph-like text,
-    // located after the author/points line and before attachments.
+    // --- Description ---
     let description: string | null = null;
-
-    // Approach 1: Look for elements with dir="ltr" that contain substantial text
-    const dirLtrEls = Array.from(document.querySelectorAll('[dir="ltr"]'));
+    const dirLtrEls = document.querySelectorAll('[dir="ltr"]');
     const descTexts: string[] = [];
-    for (const el of dirLtrEls) {
-      const t = text(el);
-      // Skip short texts (buttons, labels) and skip attachment names
+    for (let i = 0; i < dirLtrEls.length; i++) {
+      const t = gt(dirLtrEls[i]);
       if (t.length > 20 && !t.includes('балл') && !t.includes('\u2022')) {
-        // Check this isn't inside an attachment container
-        const inAttachment = el.closest('.QRiHXd') || el.closest('[data-drive-id]');
-        if (!inAttachment) {
-          descTexts.push(t);
-        }
+        const inAttach = dirLtrEls[i].closest('.QRiHXd') || dirLtrEls[i].closest('[data-drive-id]');
+        if (!inAttach) { descTexts.push(t); }
       }
     }
-
     if (descTexts.length > 0) {
-      // Take the longest text — likely the full description
-      description = descTexts.reduce((a, b) => a.length >= b.length ? a : b);
+      description = descTexts.reduce(function (a, b) { return a.length >= b.length ? a : b; });
     }
-
-    // Approach 2: If nothing found with dir="ltr", try contenteditable or data-placeholder
     if (!description) {
-      const editables = Array.from(document.querySelectorAll('[contenteditable], [data-placeholder]'));
-      for (const el of editables) {
-        const t = text(el);
-        if (t.length > 20) {
-          description = t;
-          break;
-        }
+      const editables = document.querySelectorAll('[contenteditable], [data-placeholder]');
+      for (let i = 0; i < editables.length; i++) {
+        const t = gt(editables[i]);
+        if (t.length > 20) { description = t; break; }
       }
     }
 
     // --- Attachments ---
     const attachments: Array<{ name: string; url: string; type: string | null }> = [];
-
-    // Strategy 1: Find .QRiHXd containers (this selector still works)
-    const attachContainers = Array.from(document.querySelectorAll('.QRiHXd'));
-    for (const container of attachContainers) {
-      const linkEl = container.querySelector('a');
+    const containers = document.querySelectorAll('.QRiHXd');
+    for (let i = 0; i < containers.length; i++) {
+      const linkEl = containers[i].querySelector('a');
       if (!linkEl) continue;
-
       const href = linkEl.getAttribute('href') || '';
       if (!href) continue;
 
-      const fullUrl = href.startsWith('http') ? href : `https://classroom.google.com${href}`;
-
-      // Get attachment name: try aria-label first, then visible text
+      const fullUrl = href.startsWith('http') ? href : 'https://classroom.google.com' + href;
       let name = linkEl.getAttribute('aria-label') || '';
       if (!name) {
-        // Take the first line of text in the container (usually the file name)
-        const containerText = text(container);
-        name = containerText.split('\n')[0]?.trim() || '';
+        const ct = gt(containers[i]);
+        name = ct.split('\n')[0]?.trim() || '';
       }
       if (!name) name = 'unnamed-attachment';
 
@@ -171,33 +149,29 @@ export async function fetchAssignmentDetail(
       else if (href.includes('drive.google.com')) type = 'google-drive';
       else if (href.includes('youtube.com') || href.includes('youtu.be')) type = 'youtube';
       else {
-        const extMatch = name.match(/\.(\w+)$/);
-        if (extMatch) type = extMatch[1].toLowerCase();
+        const extM = name.match(/\.(\w+)$/);
+        if (extM) type = extM[1].toLowerCase();
       }
-
-      attachments.push({ name, url: fullUrl, type });
+      attachments.push({ name: name, url: fullUrl, type: type });
     }
 
-    // Strategy 2: If no .QRiHXd found, look for Drive/Docs links directly
+    // Fallback: direct Drive/Docs links
     if (attachments.length === 0) {
-      const driveLinks = Array.from(document.querySelectorAll(
-        'a[href*="drive.google.com"], a[href*="docs.google.com"]',
-      ));
-      for (const link of driveLinks) {
-        const href = link.getAttribute('href') || '';
-        const name = link.getAttribute('aria-label') || text(link).split('\n')[0] || 'unnamed-attachment';
+      const driveLinks = document.querySelectorAll('a[href*="drive.google.com"], a[href*="docs.google.com"]');
+      for (let i = 0; i < driveLinks.length; i++) {
+        const href = driveLinks[i].getAttribute('href') || '';
+        const name = driveLinks[i].getAttribute('aria-label') || gt(driveLinks[i]).split('\n')[0] || 'unnamed-attachment';
         let type: string | null = 'google-drive';
         if (href.includes('docs.google.com')) type = 'google-doc';
-
         attachments.push({
-          name,
-          url: href.startsWith('http') ? href : `https://classroom.google.com${href}`,
-          type,
+          name: name,
+          url: href.startsWith('http') ? href : 'https://classroom.google.com' + href,
+          type: type,
         });
       }
     }
 
-    return { title, author, publishedDate, description, points, dueDate, attachments };
+    return { title: title, author: author, publishedDate: publishedDate, description: description, points: points, dueDate: dueDate, attachments: attachments };
   });
 
   logger.info(

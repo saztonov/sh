@@ -61,7 +61,7 @@ export async function fetchAssignmentDetail(
   // Use waitForFunction with a string (safe from esbuild __name injection).
   try {
     await page.waitForFunction(
-      `!!document.querySelector('[guidedhelp="assignmentInstructionsGH"]')?.innerText?.trim()`,
+      `!!document.querySelector('[guidedhelpid="assignmentInstructionsGH"]')?.innerText?.trim()`,
       undefined,
       { timeout: 10_000 },
     );
@@ -161,10 +161,10 @@ export async function fetchAssignmentDetail(
   // --- Description: text content of the assignment ---
   let description: string | null = null;
 
-  // Approach 1 (best): guidedhelp="assignmentInstructionsGH" — stable semantic attribute
+  // Approach 1 (best): guidedhelpid="assignmentInstructionsGH" — stable semantic attribute
   // The waitForFunction at page load already waited for this element's text.
   try {
-    const instructionsLocator = page.locator('[guidedhelp="assignmentInstructionsGH"]');
+    const instructionsLocator = page.locator('[guidedhelpid="assignmentInstructionsGH"]');
     if ((await instructionsLocator.count()) > 0) {
       const text = (await instructionsLocator.innerText()).trim();
       if (text.length > 0) {

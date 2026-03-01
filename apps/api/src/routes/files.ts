@@ -49,7 +49,11 @@ const fileRoutes: FastifyPluginAsync = async (fastify) => {
         reply.header('Content-Length', String(s3Response.ContentLength));
       }
 
-      return reply.send(s3Response.Body);
+      const bodyBytes = await s3Response.Body?.transformToByteArray();
+      if (!bodyBytes) {
+        return reply.code(500).send({ error: 'Empty response from storage' });
+      }
+      return reply.send(Buffer.from(bodyBytes));
     },
   );
 

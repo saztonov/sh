@@ -19,6 +19,7 @@ import {
   FilterOutlined,
   ClearOutlined,
 } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import { SUBJECTS } from '@homework/shared';
 import type { AssignmentWithCourse } from '@homework/shared';
@@ -35,6 +36,14 @@ const { Text, Title, Paragraph } = Typography;
 const { RangePicker } = DatePicker;
 
 type CompletedFilter = 'all' | 'pending' | 'done';
+
+function pluralAssignments(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${n} задание`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${n} задания`;
+  return `${n} заданий`;
+}
 
 const AssignmentsPage: React.FC = () => {
   const isMobile = useIsMobile();
@@ -59,6 +68,23 @@ const AssignmentsPage: React.FC = () => {
 
   const assignments = response?.data ?? [];
   const total = response?.total ?? 0;
+
+  const groupedAssignments = useMemo(() => {
+    const groups = new Map<string, AssignmentWithCourse[]>();
+    for (const a of assignments) {
+      const key = a.due_date ?? 'no-date';
+      const list = groups.get(key);
+      if (list) list.push(a);
+      else groups.set(key, [a]);
+    }
+    // Move "no-date" group to the end
+    const noDate = groups.get('no-date');
+    if (noDate) {
+      groups.delete('no-date');
+      groups.set('no-date', noDate);
+    }
+    return groups;
+  }, [assignments]);
 
   const handleAssignmentClick = useCallback((assignmentId: string) => {
     setDrawerAssignmentId(assignmentId);
@@ -290,13 +316,41 @@ const AssignmentsPage: React.FC = () => {
                   Найдено: {total ?? assignments.length}
                 </Text>
               </div>
-              <div style={{ padding: '0 24px' }}>
-                <List
-                  dataSource={assignments}
-                  renderItem={renderAssignmentItem}
-                  split
-                />
-              </div>
+              {Array.from(groupedAssignments.entries()).map(([dateKey, items]) => (
+                <div key={dateKey}>
+                  <div
+                    style={{
+                      padding: '10px 24px',
+                      background: '#fafafa',
+                      borderBottom: '1px solid #f0f0f0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <CalendarOutlined
+                      style={{
+                        color: dateKey === 'no-date' ? '#8c8c8c' : getDueDateColor(dateKey),
+                      }}
+                    />
+                    <Text strong style={{ fontSize: 13 }}>
+                      {dateKey === 'no-date'
+                        ? 'Без срока'
+                        : dayjs(dateKey).format('D MMMM YYYY')}
+                    </Text>
+                    <Text type="secondary" style={{ fontSize: 13 }}>
+                      {pluralAssignments(items.length)}
+                    </Text>
+                  </div>
+                  <div style={{ padding: '0 24px' }}>
+                    <List
+                      dataSource={items}
+                      renderItem={renderAssignmentItem}
+                      split
+                    />
+                  </div>
+                </div>
+              ))}
             </>
           )}
         </Card>

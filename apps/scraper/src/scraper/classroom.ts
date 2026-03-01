@@ -195,7 +195,7 @@ export async function runScrape(runId?: string): Promise<void> {
           continue;
         }
 
-        // Check if assignment already exists
+        // Check if assignment already exists (by classroom_id or fallback by course+title)
         let existingAssignment: { id: string } | null = null;
 
         if (raw.classroomId) {
@@ -203,7 +203,18 @@ export async function runScrape(runId?: string): Promise<void> {
             .from('assignments')
             .select('id')
             .eq('classroom_id', raw.classroomId)
-            .single();
+            .limit(1)
+            .maybeSingle();
+          existingAssignment = data as { id: string } | null;
+        } else {
+          // Fallback: check by course_id + title when classroom_id is unavailable
+          const { data } = await supabase
+            .from('assignments')
+            .select('id')
+            .eq('course_id', courseId)
+            .eq('title', raw.title)
+            .limit(1)
+            .maybeSingle();
           existingAssignment = data as { id: string } | null;
         }
 

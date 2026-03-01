@@ -11,7 +11,7 @@ export const SELECTORS = {
   sectionHeader: 'div.ovsVve.jlxRme',
   sectionExpandButton: 'div.ovsVve.jlxRme',
   assignmentItem: 'li.MHxtic',
-  assignmentLink: 'a.PsLuqe',
+  assignmentLink: 'a[href*="/a/"]',
 
   // Assignment detail page
   detailTitle: 'h1',

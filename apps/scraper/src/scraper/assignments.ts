@@ -38,16 +38,19 @@ async function collectItemsFromExpandedSections(
         if (!text || seen.has(text)) continue;
         seen.add(text);
 
-        // Extract the link from the same item
-        const linkEl = item.querySelector('a.PsLuqe');
+        // Extract the link from the same item (by href pattern, not CSS class)
+        const links = item.querySelectorAll('a[href]');
         let href = '';
-        if (linkEl) {
-          const rawHref = linkEl.getAttribute('href') || '';
-          href = rawHref.startsWith('http')
-            ? rawHref
-            : rawHref
-              ? `https://classroom.google.com${rawHref}`
-              : '';
+        for (const link of links) {
+          const rawHref = link.getAttribute('href') || '';
+          if (rawHref.includes('/a/')) {
+            href = rawHref.startsWith('http')
+              ? rawHref
+              : rawHref
+                ? `https://classroom.google.com${rawHref}`
+                : '';
+            break;
+          }
         }
 
         results.push({ text, href });

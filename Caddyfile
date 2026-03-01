@@ -1,0 +1,12 @@
+# Replace homework.example.com with your actual domain
+homework.example.com {
+    # Frontend SPA
+    handle {
+        reverse_proxy web:80
+    }
+
+    # API proxy
+    handle /api/* {
+        reverse_proxy api:3000
+    }
+}

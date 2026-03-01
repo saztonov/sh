@@ -1,0 +1,388 @@
+import React from 'react';
+import {
+  Tabs,
+  Table,
+  Select,
+  Switch,
+  Button,
+  Card,
+  Typography,
+  Space,
+  Tag,
+  message,
+  Spin,
+  Alert,
+  Empty,
+  Descriptions,
+} from 'antd';
+import {
+  SyncOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  LoadingOutlined,
+  PlayCircleOutlined,
+  ClockCircleOutlined,
+} from '@ant-design/icons';
+import type { ColumnsType } from 'antd/es/table';
+import dayjs from 'dayjs';
+import { SUBJECTS } from '@homework/shared';
+import type { Course, ScrapeRun } from '@homework/shared';
+import { useCourses, useUpdateCourse, useScrapeRuns, useTriggerScrape } from '../hooks/useCourses';
+import { useIsMobile } from '../hooks/useMediaQuery';
+
+const { Title, Text } = Typography;
+
+const subjectOptions = [
+  { label: 'Не задано', value: '' },
+  ...SUBJECTS.map((s) => ({ label: s, value: s })),
+];
+
+const SettingsPage: React.FC = () => {
+  const isMobile = useIsMobile();
+  const [messageApi, contextHolder] = message.useMessage();
+
+  return (
+    <div>
+      {contextHolder}
+      <Title level={isMobile ? 5 : 4} style={{ marginBottom: 16 }}>
+        Настройки
+      </Title>
+
+      <Card style={{ borderRadius: 12 }}>
+        <Tabs
+          defaultActiveKey="courses"
+          items={[
+            {
+              key: 'courses',
+              label: 'Соответствие предметов',
+              children: <CourseMappingTab isMobile={isMobile} messageApi={messageApi} />,
+            },
+            {
+              key: 'scraper',
+              label: 'Сбор заданий',
+              children: <ScraperTab isMobile={isMobile} messageApi={messageApi} />,
+            },
+          ]}
+        />
+      </Card>
+    </div>
+  );
+};
+
+// --- Course Mapping Tab ---
+
+interface TabProps {
+  isMobile: boolean;
+  messageApi: ReturnType<typeof message.useMessage>[0];
+}
+
+const CourseMappingTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
+  const { data: courses, isLoading, error } = useCourses();
+  const updateCourse = useUpdateCourse();
+
+  const handleSubjectChange = async (courseId: string, value: string) => {
+    try {
+      await updateCourse.mutateAsync({
+        id: courseId,
+        updates: { subject: value || null },
+      });
+      messageApi.success('Предмет обновлен');
+    } catch {
+      messageApi.error('Не удалось обновить предмет');
+    }
+  };
+
+  const handleActiveToggle = async (courseId: string, checked: boolean) => {
+    try {
+      await updateCourse.mutateAsync({
+        id: courseId,
+        updates: { is_active: checked },
+      });
+      messageApi.success(checked ? 'Курс активирован' : 'Курс деактивирован');
+    } catch {
+      messageApi.error('Не удалось обновить статус');
+    }
+  };
+
+  const columns: ColumnsType<Course> = [
+    {
+      title: 'Название в Classroom',
+      dataIndex: 'classroom_name',
+      key: 'classroom_name',
+      ellipsis: true,
+      width: isMobile ? 140 : undefined,
+    },
+    {
+      title: 'Предмет',
+      dataIndex: 'subject',
+      key: 'subject',
+      width: isMobile ? 140 : 200,
+      render: (subject: string | null, record: Course) => (
+        <Select
+          value={subject || ''}
+          onChange={(value) => handleSubjectChange(record.id, value)}
+          options={subjectOptions}
+          style={{ width: '100%' }}
+          size={isMobile ? 'small' : 'middle'}
+          showSearch
+          optionFilterProp="label"
+          loading={
+            updateCourse.isPending &&
+            updateCourse.variables?.id === record.id
+          }
+        />
+      ),
+    },
+    {
+      title: 'Активен',
+      dataIndex: 'is_active',
+      key: 'is_active',
+      width: 80,
+      align: 'center',
+      render: (isActive: boolean, record: Course) => (
+        <Switch
+          checked={isActive}
+          onChange={(checked) => handleActiveToggle(record.id, checked)}
+          size="small"
+          loading={
+            updateCourse.isPending &&
+            updateCourse.variables?.id === record.id
+          }
+        />
+      ),
+    },
+  ];
+
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+        <Spin size="large" tip="Загрузка курсов..." />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert
+        message="Ошибка загрузки курсов"
+        description={error instanceof Error ? error.message : 'Неизвестная ошибка'}
+        type="error"
+        showIcon
+      />
+    );
+  }
+
+  if (!courses || courses.length === 0) {
+    return <Empty description="Курсы не найдены" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+  }
+
+  return (
+    <div>
+      <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+        Сопоставьте курсы из Google Classroom с предметами из расписания.
+        Деактивированные курсы не будут отображаться в расписании.
+      </Text>
+      <Table<Course>
+        columns={columns}
+        dataSource={courses}
+        rowKey="id"
+        pagination={false}
+        size={isMobile ? 'small' : 'middle'}
+        scroll={isMobile ? { x: 360 } : undefined}
+        rowClassName={(record) => (record.is_active ? '' : 'inactive-row')}
+      />
+    </div>
+  );
+};
+
+// --- Scraper Tab ---
+
+const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
+  const { data: runs, isLoading, error } = useScrapeRuns();
+  const triggerScrape = useTriggerScrape();
+
+  const handleTrigger = async () => {
+    try {
+      await triggerScrape.mutateAsync();
+      messageApi.success('Сбор заданий запущен');
+    } catch {
+      messageApi.error('Не удалось запустить сбор');
+    }
+  };
+
+  const lastRun = runs?.[0] ?? null;
+  const isRunning =
+    lastRun?.status === 'pending' || lastRun?.status === 'running';
+
+  const getStatusTag = (status: ScrapeRun['status']) => {
+    switch (status) {
+      case 'pending':
+        return (
+          <Tag icon={<ClockCircleOutlined />} color="default">
+            Ожидание
+          </Tag>
+        );
+      case 'running':
+        return (
+          <Tag icon={<LoadingOutlined spin />} color="processing">
+            Выполняется
+          </Tag>
+        );
+      case 'success':
+        return (
+          <Tag icon={<CheckCircleOutlined />} color="success">
+            Успешно
+          </Tag>
+        );
+      case 'error':
+        return (
+          <Tag icon={<CloseCircleOutlined />} color="error">
+            Ошибка
+          </Tag>
+        );
+      default:
+        return <Tag>{status}</Tag>;
+    }
+  };
+
+  const historyColumns: ColumnsType<ScrapeRun> = [
+    {
+      title: 'Начало',
+      dataIndex: 'started_at',
+      key: 'started_at',
+      width: 160,
+      render: (val: string) => dayjs(val).format('DD.MM.YYYY HH:mm'),
+    },
+    {
+      title: 'Статус',
+      dataIndex: 'status',
+      key: 'status',
+      width: 130,
+      render: (status: ScrapeRun['status']) => getStatusTag(status),
+    },
+    {
+      title: 'Найдено',
+      dataIndex: 'assignments_found',
+      key: 'assignments_found',
+      width: 90,
+      align: 'center',
+      render: (val: number | null) => val ?? '—',
+    },
+    {
+      title: 'Новых',
+      dataIndex: 'assignments_new',
+      key: 'assignments_new',
+      width: 80,
+      align: 'center',
+      render: (val: number | null) => val ?? '—',
+    },
+    {
+      title: 'Завершение',
+      dataIndex: 'finished_at',
+      key: 'finished_at',
+      width: 160,
+      render: (val: string | null) =>
+        val ? dayjs(val).format('DD.MM.YYYY HH:mm') : '—',
+    },
+    {
+      title: 'Ошибка',
+      dataIndex: 'error_message',
+      key: 'error_message',
+      ellipsis: true,
+      render: (val: string | null) =>
+        val ? (
+          <Text type="danger" ellipsis>
+            {val}
+          </Text>
+        ) : (
+          '—'
+        ),
+    },
+  ];
+
+  return (
+    <div>
+      {/* Action and status */}
+      <Card
+        size="small"
+        style={{ marginBottom: 16, borderRadius: 8, background: '#fafafa' }}
+      >
+        <Space
+          direction={isMobile ? 'vertical' : 'horizontal'}
+          size="large"
+          style={{ width: '100%' }}
+        >
+          <Button
+            type="primary"
+            icon={isRunning ? <LoadingOutlined spin /> : <PlayCircleOutlined />}
+            onClick={handleTrigger}
+            loading={triggerScrape.isPending}
+            disabled={isRunning}
+            size="large"
+          >
+            {isRunning ? 'Сбор выполняется...' : 'Запустить сбор'}
+          </Button>
+
+          {lastRun && (
+            <Descriptions column={isMobile ? 1 : 3} size="small">
+              <Descriptions.Item label="Последний запуск">
+                {dayjs(lastRun.started_at).format('DD.MM.YYYY HH:mm')}
+              </Descriptions.Item>
+              <Descriptions.Item label="Статус">
+                {getStatusTag(lastRun.status)}
+              </Descriptions.Item>
+              {lastRun.status === 'success' && (
+                <Descriptions.Item label="Результат">
+                  Найдено {lastRun.assignments_found ?? 0}, новых{' '}
+                  {lastRun.assignments_new ?? 0}
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+          )}
+        </Space>
+      </Card>
+
+      {/* History */}
+      <Title level={5} style={{ marginBottom: 12 }}>
+        История сборов
+      </Title>
+
+      {isLoading && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+          <Spin size="large" tip="Загрузка истории..." />
+        </div>
+      )}
+
+      {error && (
+        <Alert
+          message="Ошибка загрузки истории"
+          description={error instanceof Error ? error.message : 'Неизвестная ошибка'}
+          type="error"
+          showIcon
+        />
+      )}
+
+      {!isLoading && !error && (
+        <>
+          {!runs || runs.length === 0 ? (
+            <Empty
+              description="Сборы ещё не выполнялись"
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
+          ) : (
+            <Table<ScrapeRun>
+              columns={historyColumns}
+              dataSource={runs}
+              rowKey="id"
+              pagination={{ pageSize: 10, hideOnSinglePage: true }}
+              size={isMobile ? 'small' : 'middle'}
+              scroll={isMobile ? { x: 600 } : undefined}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+export default SettingsPage;

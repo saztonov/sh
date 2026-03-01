@@ -1,0 +1,126 @@
+/* Global styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #f5f5f5;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
+/* Ant Design overrides for mobile */
+@media (max-width: 767px) {
+  .ant-layout-sider {
+    display: none !important;
+  }
+
+  .ant-table {
+    font-size: 13px;
+  }
+
+  .ant-drawer-content-wrapper {
+    width: 100% !important;
+  }
+}
+
+/* Schedule day header */
+.schedule-day-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f1f1f;
+}
+
+.schedule-day-header .date {
+  color: #8c8c8c;
+  font-weight: 400;
+  font-size: 14px;
+}
+
+/* Assignment tag cursor */
+.assignment-tag {
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.assignment-tag:hover {
+  opacity: 0.8;
+}
+
+/* Mobile bottom navigation */
+.mobile-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: #ffffff;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  height: 56px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.mobile-bottom-nav .nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 6px 0;
+  color: #8c8c8c;
+  font-size: 11px;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.mobile-bottom-nav .nav-item.active {
+  color: #1677ff;
+}
+
+.mobile-bottom-nav .nav-item .anticon {
+  font-size: 20px;
+  margin-bottom: 2px;
+}
+
+/* Content padding on mobile when bottom nav is visible */
+.mobile-content-padding {
+  padding-bottom: 72px;
+}

@@ -1,0 +1,34 @@
+{
+  "name": "homework-portal",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:api": "npm run dev -w apps/api",
+    "dev:web": "npm run dev -w apps/web",
+    "dev:scraper": "npm run dev -w apps/scraper",
+    "dev:bot": "npm run dev -w apps/bot",
+    "build": "npm run build --workspaces --if-present",
+    "build:shared": "npm run build -w packages/shared",
+    "build:api": "npm run build -w apps/api",
+    "build:web": "npm run build -w apps/web",
+    "build:scraper": "npm run build -w apps/scraper",
+    "build:bot": "npm run build -w apps/bot",
+    "seed": "tsx scripts/seed-schedule.ts",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0",
+    "@types/node": "^22.0.0"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5",
+    "@supabase/supabase-js": "^2.49.0",
+    "dotenv": "^16.4.0"
+  }
+}

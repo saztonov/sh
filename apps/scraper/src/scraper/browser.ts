@@ -1,4 +1,4 @@
-import { chromium, type Browser, type BrowserContext } from 'playwright';
+import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { existsSync } from 'node:fs';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
@@ -76,21 +76,48 @@ export async function closeBrowser(browser: Browser): Promise<void> {
 }
 
 /**
- * Check if the user is actually logged in to Google Classroom
- * by looking for course cards on the page (not just URL).
- * Google Classroom may show a "Sign in" button on classroom.google.com
- * without redirecting to accounts.google.com.
+ * Check if the user is logged in to Google Classroom.
+ * Does NOT rely on CSS class names (Google changes them frequently).
+ * Instead checks:
+ * 1. URL is on classroom.google.com (not accounts.google.com or landing page)
+ * 2. Page has loaded meaningful content (not just a sign-in shell)
  */
-async function isLoggedInToClassroom(page: import('playwright').Page): Promise<boolean> {
-  // Check for course cards — these only appear when logged in
-  const courseCards = await page.$$('div.GRvzhf.YVvGBb');
-  if (courseCards.length > 0) return true;
+async function isLoggedInToClassroom(page: Page): Promise<boolean> {
+  const url = page.url();
 
-  // Also check for the user avatar/profile button as a sign of being logged in
-  const profileBtn = await page.$('a[aria-label*="Google Account"], img.gb_A, img.gb_za');
-  if (profileBtn) return true;
+  // Definitely not logged in if on Google login page
+  if (url.includes('accounts.google.com')) return false;
 
-  return false;
+  // Must be on an authenticated Classroom URL
+  if (!url.includes('classroom.google.com/u/')) return false;
+
+  // Check that the page has actual content by evaluating in browser context
+  // Logged-in Classroom has a navigation bar and main content area
+  try {
+    const hasContent = await page.evaluate(() => {
+      // The authenticated Classroom page has a header bar with navigation
+      // and a main content area. The sign-in landing page is mostly empty.
+      // Check for multiple signs of being logged in:
+
+      // 1. Any link that points to /u/0/ paths (class links, nav links)
+      const internalLinks = document.querySelectorAll('a[href*="/u/0/"]');
+      if (internalLinks.length >= 3) return true;
+
+      // 2. Main navigation/app bar is present (role="navigation" or role="banner")
+      const nav = document.querySelector('[role="navigation"], [role="banner"]');
+      const main = document.querySelector('[role="main"], main');
+      if (nav && main) return true;
+
+      // 3. Check body has substantial content (not just a sign-in button)
+      const bodyText = document.body?.innerText ?? '';
+      if (bodyText.length > 500) return true;
+
+      return false;
+    });
+    return hasContent;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -114,16 +141,18 @@ export async function captureSession(): Promise<{ success: boolean; error?: stri
     // Track browser disconnect (user closes browser manually)
     browser.on('disconnected', () => {
       browserDisconnected = true;
+      logger.info('Browser disconnected (closed by user)');
     });
 
-    // Eagerly save session whenever the page navigates to classroom.google.com
-    // This ensures we capture cookies even if the user closes the browser right after login
+    // Eagerly save session whenever the page navigates to an authenticated Classroom URL.
+    // This fires immediately on redirect from accounts.google.com back to classroom,
+    // capturing cookies even if the user closes the browser right after.
     page.on('framenavigated', (frame) => {
       if (frame === page.mainFrame() && frame.url().includes('classroom.google.com/u/0/')) {
         context.storageState({ path: config.playwright.statePath })
           .then(() => {
             sessionSaved = true;
-            logger.info('Session saved (eager save on navigation to Classroom)');
+            logger.info({ url: frame.url() }, 'Session saved (eager save on navigation to Classroom)');
           })
           .catch(() => {
             // Context may already be closed — ignore
@@ -136,7 +165,7 @@ export async function captureSession(): Promise<{ success: boolean; error?: stri
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(3000);
 
-    // Check if already logged in by looking for actual classroom content
+    // Check if already logged in
     if (await isLoggedInToClassroom(page)) {
       logger.info('Already logged in to Google Classroom');
       await saveBrowserState(context);
@@ -148,54 +177,63 @@ export async function captureSession(): Promise<{ success: boolean; error?: stri
     logger.info('Not logged in — waiting for manual login (10 min timeout)...');
 
     const deadline = Date.now() + 600_000; // 10 minutes
-    let confirmedLoggedIn = false;
 
     while (Date.now() < deadline && !browserDisconnected) {
       try {
         await page.waitForTimeout(3000);
       } catch {
-        // Browser was closed during waitForTimeout
-        break;
+        break; // Browser was closed during wait
       }
 
       if (browserDisconnected) break;
 
+      // If eager save already captured session, we're done
+      if (sessionSaved) {
+        // Do one final save to get the most up-to-date state
+        try {
+          await saveBrowserState(context);
+        } catch { /* browser might be closing */ }
+        logger.info('Login detected via navigation, session saved');
+        if (!browserDisconnected) {
+          await closeBrowser(browser);
+        }
+        return { success: true };
+      }
+
+      // Also check via page content as a backup
       try {
         if (await isLoggedInToClassroom(page)) {
-          // Save session one more time with final state
           await saveBrowserState(context);
           sessionSaved = true;
-          confirmedLoggedIn = true;
-          logger.info('Login confirmed, session saved');
-          break;
+          logger.info('Login confirmed via content check, session saved');
+          if (!browserDisconnected) {
+            await closeBrowser(browser);
+          }
+          return { success: true };
         }
       } catch {
-        // Browser was closed during check
-        break;
+        break; // Browser was closed during check
       }
     }
 
-    // Determine result
-    if (confirmedLoggedIn) {
+    // Loop ended — determine result
+
+    if (sessionSaved) {
+      // Session was captured (via eager save or content check) even though loop ended
+      logger.info('Session was saved successfully');
       if (!browserDisconnected) {
-        await closeBrowser(browser);
+        try { await closeBrowser(browser); } catch { /* already closed */ }
       }
-      return { success: true };
-    }
-
-    if (browserDisconnected && sessionSaved) {
-      // User closed browser, but we already saved session via framenavigated handler
-      logger.info('Browser closed by user, but session was already saved');
       return { success: true };
     }
 
     if (browserDisconnected) {
-      return { success: false, error: 'Браузер был закрыт до завершения входа. Попробуйте ещё раз — после входа дождитесь, пока в консоли появится сообщение о сохранении сессии.' };
+      return { success: false, error: 'Браузер был закрыт до завершения входа. Попробуйте ещё раз.' };
     }
 
     // Timeout
     await closeBrowser(browser);
-    return { success: false, error: 'Login timeout — browser was open for 10 minutes without successful login' };
+    return { success: false, error: 'Время ожидания истекло (10 минут). Попробуйте ещё раз.' };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     logger.error({ err }, 'Session capture failed');
@@ -232,20 +270,11 @@ export async function validateSession(): Promise<'valid' | 'invalid' | 'no_sessi
     // Wait for page to settle (redirects, JS rendering)
     await page.waitForTimeout(5000);
 
-    // Check URL first (may redirect to accounts.google.com)
-    const isLoginPage = page.url().includes('accounts.google.com');
-    if (isLoginPage) {
-      await closeBrowser(browser);
-      logger.info('Session is invalid — redirected to login');
-      return 'invalid';
-    }
-
-    // Also check for actual classroom content
     const loggedIn = await isLoggedInToClassroom(page);
     await closeBrowser(browser);
 
     if (!loggedIn) {
-      logger.info('Session is invalid — no classroom content found');
+      logger.info('Session is invalid');
       return 'invalid';
     }
 

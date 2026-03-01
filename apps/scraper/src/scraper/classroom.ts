@@ -42,13 +42,13 @@ async function fetchCourses(page: Page): Promise<string[]> {
 
   await page.waitForTimeout(3000);
 
-  // Check if we're on a login page (URL redirect or Sign-in button on classroom.google.com)
-  const isLoginUrl = page.url().includes('accounts.google.com');
-  const courseCards = await page.$$(SELECTORS.courseCard);
-
-  if (isLoginUrl || courseCards.length === 0) {
+  // Check if we're on a login page (not authenticated)
+  const url = page.url();
+  if (url.includes('accounts.google.com') || !url.includes('classroom.google.com/u/')) {
     throw new Error('No valid Google Classroom session. Use "Войти в Google Classroom" button in Settings to capture a session first.');
   }
+
+  const courseCards = await page.$$(SELECTORS.courseCard);
   const seen = new Set<string>();
   const courseNames: string[] = [];
 

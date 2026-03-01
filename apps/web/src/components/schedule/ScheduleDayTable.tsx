@@ -44,10 +44,10 @@ const ScheduleDayTable: React.FC<ScheduleDayTableProps> = ({ slots, onAssignment
       title: '\u2116',
       dataIndex: 'lessonNumber',
       key: 'lessonNumber',
-      width: 50,
+      width: 40,
       align: 'center',
       render: (num: number) => (
-        <Text strong style={{ fontSize: 15 }}>
+        <Text strong style={{ fontSize: 13 }}>
           {num}
         </Text>
       ),
@@ -55,11 +55,11 @@ const ScheduleDayTable: React.FC<ScheduleDayTableProps> = ({ slots, onAssignment
     {
       title: 'Время',
       key: 'time',
-      width: 110,
+      width: 90,
       render: (_: unknown, record: MergedSlot) => {
         if (!record.timeStart || !record.timeEnd) return <Text type="secondary">—</Text>;
         return (
-          <Text style={{ fontSize: 13 }}>
+          <Text style={{ fontSize: 12 }}>
             {record.timeStart}–{record.timeEnd}
           </Text>
         );
@@ -69,11 +69,11 @@ const ScheduleDayTable: React.FC<ScheduleDayTableProps> = ({ slots, onAssignment
       title: 'Предмет',
       dataIndex: 'subject',
       key: 'subject',
-      width: 160,
+      width: 130,
       render: (subject: string) => (
         <Tag
           color={getSubjectColor(subject)}
-          style={{ borderRadius: 4, fontWeight: 500, margin: 0 }}
+          style={{ borderRadius: 4, fontWeight: 500, margin: 0, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
         >
           {subject}
         </Tag>
@@ -84,59 +84,54 @@ const ScheduleDayTable: React.FC<ScheduleDayTableProps> = ({ slots, onAssignment
       key: 'assignments',
       render: (_: unknown, record: MergedSlot) => {
         if (record.assignments.length === 0) {
-          return <Text type="secondary" style={{ fontSize: 13 }}>—</Text>;
+          return <Text type="secondary" style={{ fontSize: 12 }}>—</Text>;
         }
 
         return (
-          <Space wrap size={[4, 4]}>
+          <Space direction="vertical" size={2} style={{ width: '100%' }}>
             {record.assignments.map((a) => (
-              <Tag
+              <div
                 key={a.id}
-                className="assignment-tag"
-                color={getAssignmentTagColor(a)}
-                icon={a.isCompleted ? <CheckCircleOutlined /> : undefined}
-                onClick={() => onAssignmentClick(a.id)}
                 style={{
-                  cursor: 'pointer',
-                  maxWidth: 200,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  borderRadius: 4,
-                  textDecoration: a.isCompleted ? 'line-through' : 'none',
-                  opacity: a.isCompleted ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
                 }}
               >
-                {a.title}
-              </Tag>
-            ))}
-          </Space>
-        );
-      },
-    },
-    {
-      title: 'Выполнено',
-      key: 'completed',
-      width: 100,
-      align: 'center',
-      render: (_: unknown, record: MergedSlot) => {
-        if (record.assignments.length === 0) return null;
-
-        return (
-          <Space direction="vertical" size={4}>
-            {record.assignments.map((a) => (
-              <Switch
-                key={a.id}
-                size="small"
-                checked={a.isCompleted}
-                onChange={() => handleToggle(a)}
-                loading={
-                  toggleCompleted.isPending &&
-                  toggleCompleted.variables?.id === a.id
-                }
-                checkedChildren={<CheckCircleOutlined />}
-                unCheckedChildren={<ClockCircleOutlined />}
-              />
+                <Tag
+                  className="assignment-tag"
+                  color={getAssignmentTagColor(a)}
+                  icon={a.isCompleted ? <CheckCircleOutlined /> : undefined}
+                  onClick={() => onAssignmentClick(a.id)}
+                  style={{
+                    cursor: 'pointer',
+                    maxWidth: 180,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    borderRadius: 4,
+                    textDecoration: a.isCompleted ? 'line-through' : 'none',
+                    opacity: a.isCompleted ? 0.7 : 1,
+                    margin: 0,
+                    flex: '1 1 auto',
+                    minWidth: 0,
+                  }}
+                >
+                  {a.title}
+                </Tag>
+                <Switch
+                  size="small"
+                  checked={a.isCompleted}
+                  onChange={() => handleToggle(a)}
+                  loading={
+                    toggleCompleted.isPending &&
+                    toggleCompleted.variables?.id === a.id
+                  }
+                  checkedChildren={<CheckCircleOutlined />}
+                  unCheckedChildren={<ClockCircleOutlined />}
+                  style={{ flexShrink: 0 }}
+                />
+              </div>
             ))}
           </Space>
         );
@@ -150,8 +145,7 @@ const ScheduleDayTable: React.FC<ScheduleDayTableProps> = ({ slots, onAssignment
       dataSource={slots}
       rowKey="lessonNumber"
       pagination={false}
-      size="middle"
-      style={{ marginBottom: 8 }}
+      size="small"
       rowClassName={(record) => {
         const hasOverdue = record.assignments.some(
           (a) => !a.isCompleted && getDueDateStatus(a.dueDate) === 'overdue',

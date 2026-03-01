@@ -33,3 +33,8 @@ export function useMediaQuery(query: string): boolean {
 export function useIsMobile(): boolean {
   return useMediaQuery('(max-width: 767px)');
 }
+
+/** Returns true on wide desktop screens (>= 1200px). */
+export function useIsWideDesktop(): boolean {
+  return useMediaQuery('(min-width: 1200px)');
+}

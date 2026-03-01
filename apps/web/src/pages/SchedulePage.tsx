@@ -1,10 +1,10 @@
-import React, { useState, useCallback } from 'react';
-import { Button, Space, Typography, Spin, Alert, Card, Empty } from 'antd';
-import { LeftOutlined, RightOutlined, CalendarOutlined } from '@ant-design/icons';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { Button, Space, Typography, Spin, Alert, Card, Empty, Checkbox, Progress } from 'antd';
+import { LeftOutlined, RightOutlined, CalendarOutlined, DownOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { MergedScheduleDay } from '@homework/shared';
 import { useMergedSchedule } from '../hooks/useSchedule';
-import { useIsMobile } from '../hooks/useMediaQuery';
+import { useIsMobile, useIsWideDesktop } from '../hooks/useMediaQuery';
 import { formatWeekRange } from '../lib/format';
 import ScheduleDayTable from '../components/schedule/ScheduleDayTable';
 import ScheduleDayCard from '../components/schedule/ScheduleDayCard';
@@ -12,13 +12,60 @@ import AssignmentDrawer from '../components/assignments/AssignmentDrawer';
 
 const { Title, Text } = Typography;
 
+const FILTER_STORAGE_KEY = 'schedule_filter_only_assignments';
+
+function getInitialFilter(): boolean {
+  try {
+    return localStorage.getItem(FILTER_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
 const SchedulePage: React.FC = () => {
   const [weekOffset, setWeekOffset] = useState(0);
   const [drawerAssignmentId, setDrawerAssignmentId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [onlyWithAssignments, setOnlyWithAssignments] = useState(getInitialFilter);
+  const [collapsedDays, setCollapsedDays] = useState<Set<number>>(new Set());
   const isMobile = useIsMobile();
+  const isWideDesktop = useIsWideDesktop();
+  const todayRef = useRef<HTMLDivElement>(null);
+  const scrolledRef = useRef(false);
 
   const { data: days, isLoading, error } = useMergedSchedule(weekOffset);
+
+  // Auto-scroll to today on current week
+  useEffect(() => {
+    if (weekOffset === 0 && days && days.length > 0 && !scrolledRef.current) {
+      scrolledRef.current = true;
+      // Small delay to let layout settle
+      setTimeout(() => {
+        todayRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, [weekOffset, days]);
+
+  // Reset scroll flag when switching weeks
+  useEffect(() => {
+    scrolledRef.current = false;
+  }, [weekOffset]);
+
+  // Auto-collapse past days on current week
+  useEffect(() => {
+    if (weekOffset === 0 && days) {
+      const today = dayjs();
+      const pastDays = new Set<number>();
+      for (const day of days) {
+        if (dayjs(day.date).isBefore(today, 'day')) {
+          pastDays.add(day.dayOfWeek);
+        }
+      }
+      setCollapsedDays(pastDays);
+    } else {
+      setCollapsedDays(new Set());
+    }
+  }, [weekOffset, days]);
 
   const handleAssignmentClick = useCallback((assignmentId: string) => {
     setDrawerAssignmentId(assignmentId);
@@ -27,7 +74,6 @@ const SchedulePage: React.FC = () => {
 
   const handleDrawerClose = useCallback(() => {
     setDrawerOpen(false);
-    // Delay clearing ID so the drawer can animate out with content
     setTimeout(() => setDrawerAssignmentId(null), 300);
   }, []);
 
@@ -35,52 +81,154 @@ const SchedulePage: React.FC = () => {
   const goToNextWeek = () => setWeekOffset((prev) => prev + 1);
   const goToCurrentWeek = () => setWeekOffset(0);
 
+  const handleFilterChange = (checked: boolean) => {
+    setOnlyWithAssignments(checked);
+    try {
+      localStorage.setItem(FILTER_STORAGE_KEY, String(checked));
+    } catch { /* ignore */ }
+  };
+
+  const toggleCollapse = (dayOfWeek: number) => {
+    setCollapsedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(dayOfWeek)) {
+        next.delete(dayOfWeek);
+      } else {
+        next.add(dayOfWeek);
+      }
+      return next;
+    });
+  };
+
+  // Week summary
+  const weekSummary = useMemo(() => {
+    if (!days) return null;
+    let total = 0;
+    let pending = 0;
+    for (const day of days) {
+      for (const slot of day.slots) {
+        total += slot.assignments.length;
+        pending += slot.assignments.filter((a) => !a.isCompleted).length;
+      }
+    }
+    return { total, pending };
+  }, [days]);
+
   const hasAssignments =
     days && days.some((day) => day.slots.some((slot) => slot.assignments.length > 0));
 
-  const renderDayHeader = (day: MergedScheduleDay) => {
+  const getDayStats = (day: MergedScheduleDay) => {
+    let total = 0;
+    let completed = 0;
+    for (const slot of day.slots) {
+      total += slot.assignments.length;
+      completed += slot.assignments.filter((a) => a.isCompleted).length;
+    }
+    return { total, completed, pending: total - completed };
+  };
+
+  const renderDayCard = (day: MergedScheduleDay) => {
     const dateObj = dayjs(day.date);
     const isToday = dateObj.isSame(dayjs(), 'day');
-    const assignmentCount = day.slots.reduce(
-      (acc, slot) => acc + slot.assignments.length,
-      0,
-    );
-    const pendingCount = day.slots.reduce(
-      (acc, slot) => acc + slot.assignments.filter((a) => !a.isCompleted).length,
-      0,
-    );
+    const isPast = dateObj.isBefore(dayjs(), 'day');
+    const isCollapsed = collapsedDays.has(day.dayOfWeek);
+    const stats = getDayStats(day);
+
+    const filteredSlots = onlyWithAssignments
+      ? day.slots.filter((s) => s.assignments.length > 0)
+      : day.slots;
+
+    const progressPercent = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
 
     return (
       <div
-        className="schedule-day-header"
-        style={{
-          background: isToday ? '#e6f4ff' : 'transparent',
-          padding: isToday ? '12px 16px 8px' : '12px 0 8px',
-          borderRadius: isToday ? 8 : 0,
-          marginTop: 8,
-        }}
+        key={day.dayOfWeek}
+        ref={isToday ? todayRef : undefined}
+        style={{ opacity: isPast && !isToday ? 0.8 : 1 }}
       >
-        <span>{day.dayName}</span>
-        <span className="date">{dateObj.format('D MMMM')}</span>
-        {assignmentCount > 0 && (
-          <Text type="secondary" style={{ fontSize: 13, marginLeft: 'auto' }}>
-            {pendingCount > 0
-              ? `${pendingCount} из ${assignmentCount} не выполнено`
-              : `${assignmentCount} заданий - все выполнено`}
-          </Text>
-        )}
-        {isToday && (
-          <Text
+        <Card
+          size="small"
+          style={{
+            borderRadius: 10,
+            border: isToday ? '2px solid #1677ff' : '1px solid #f0f0f0',
+          }}
+          bodyStyle={{ padding: 0 }}
+        >
+          {/* Day header — clickable to toggle collapse */}
+          <div
+            onClick={() => toggleCollapse(day.dayOfWeek)}
             style={{
-              fontSize: 12,
-              color: '#1677ff',
-              fontWeight: 600,
-              marginLeft: 8,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '10px 16px',
+              cursor: 'pointer',
+              userSelect: 'none',
+              background: isToday ? '#e6f4ff' : 'transparent',
+              borderRadius: isCollapsed ? 10 : '10px 10px 0 0',
             }}
           >
-            Сегодня
-          </Text>
-        )}
+            {isCollapsed ? (
+              <RightOutlined style={{ fontSize: 10, color: '#8c8c8c' }} />
+            ) : (
+              <DownOutlined style={{ fontSize: 10, color: '#8c8c8c' }} />
+            )}
+            <Text strong style={{ fontSize: 15 }}>{day.dayName}</Text>
+            <Text type="secondary" style={{ fontSize: 13 }}>{dateObj.format('D MMM')}</Text>
+            {isToday && (
+              <Text style={{ fontSize: 11, color: '#1677ff', fontWeight: 600 }}>
+                Сегодня
+              </Text>
+            )}
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+              {stats.total > 0 && (
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {stats.pending > 0
+                    ? `${stats.pending} из ${stats.total}`
+                    : `${stats.total} ✓`}
+                </Text>
+              )}
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          {!isCollapsed && stats.total > 0 && (
+            <div style={{ padding: '0 16px' }}>
+              <Progress
+                percent={progressPercent}
+                size="small"
+                showInfo={false}
+                strokeColor={progressPercent === 100 ? '#52c41a' : '#1677ff'}
+                style={{ marginBottom: 4 }}
+              />
+            </div>
+          )}
+
+          {/* Day content */}
+          {!isCollapsed && (
+            <div style={{ padding: '0 0 4px' }}>
+              {filteredSlots.length > 0 ? (
+                isMobile ? (
+                  <ScheduleDayCard
+                    slots={filteredSlots}
+                    onAssignmentClick={handleAssignmentClick}
+                  />
+                ) : (
+                  <ScheduleDayTable
+                    slots={filteredSlots}
+                    onAssignmentClick={handleAssignmentClick}
+                  />
+                )
+              ) : (
+                <div style={{ padding: '12px 16px', textAlign: 'center' }}>
+                  <Text type="secondary" style={{ fontSize: 13 }}>
+                    Нет заданий
+                  </Text>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
       </div>
     );
   };
@@ -90,7 +238,7 @@ const SchedulePage: React.FC = () => {
       {/* Week navigation header */}
       <Card
         bodyStyle={{
-          padding: isMobile ? '12px 16px' : '16px 24px',
+          padding: isMobile ? '12px 16px' : '12px 24px',
         }}
         style={{ marginBottom: 16, borderRadius: 12 }}
       >
@@ -107,11 +255,11 @@ const SchedulePage: React.FC = () => {
             <Button
               icon={<LeftOutlined />}
               onClick={goToPrevWeek}
-              size={isMobile ? 'middle' : 'large'}
+              size="middle"
             />
-            <div style={{ textAlign: 'center', minWidth: isMobile ? 160 : 220 }}>
+            <div style={{ textAlign: 'center', minWidth: isMobile ? 140 : 200 }}>
               <Title
-                level={isMobile ? 5 : 4}
+                level={5}
                 style={{ margin: 0, whiteSpace: 'nowrap' }}
               >
                 <CalendarOutlined style={{ marginRight: 8 }} />
@@ -121,16 +269,36 @@ const SchedulePage: React.FC = () => {
             <Button
               icon={<RightOutlined />}
               onClick={goToNextWeek}
-              size={isMobile ? 'middle' : 'large'}
+              size="middle"
             />
           </Space>
 
-          {weekOffset !== 0 && (
-            <Button type="link" onClick={goToCurrentWeek} style={{ padding: 0 }}>
-              Текущая неделя
-            </Button>
-          )}
+          <Space wrap size={12}>
+            {weekOffset !== 0 && (
+              <Button type="link" onClick={goToCurrentWeek} style={{ padding: 0 }}>
+                Текущая неделя
+              </Button>
+            )}
+            <Checkbox
+              checked={onlyWithAssignments}
+              onChange={(e) => handleFilterChange(e.target.checked)}
+            >
+              <Text style={{ fontSize: 13 }}>Только с заданиями</Text>
+            </Checkbox>
+          </Space>
         </div>
+
+        {/* Week summary */}
+        {weekSummary && weekSummary.total > 0 && (
+          <div style={{ marginTop: 6 }}>
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              {weekSummary.total} {weekSummary.total === 1 ? 'задание' : weekSummary.total < 5 ? 'задания' : 'заданий'}
+              {weekSummary.pending > 0
+                ? `, ${weekSummary.pending} не выполнено`
+                : ' — все выполнено'}
+            </Text>
+          </div>
+        )}
       </Card>
 
       {/* Loading state */}
@@ -161,38 +329,30 @@ const SchedulePage: React.FC = () => {
         </Card>
       )}
 
-      {/* Schedule content */}
+      {/* Schedule content — 2-column grid on wide desktop */}
       {!isLoading && days && days.length > 0 && (
-        <div>
-          {days.map((day) => (
-            <div key={day.dayOfWeek}>
-              {renderDayHeader(day)}
-              {isMobile ? (
-                <ScheduleDayCard
-                  slots={day.slots}
-                  onAssignmentClick={handleAssignmentClick}
-                />
-              ) : (
-                <ScheduleDayTable
-                  slots={day.slots}
-                  onAssignmentClick={handleAssignmentClick}
-                />
-              )}
-            </div>
-          ))}
-
-          {/* Summary if no assignments at all */}
-          {!hasAssignments && (
-            <Card
-              style={{ marginTop: 16, borderRadius: 12, textAlign: 'center' }}
-              bodyStyle={{ padding: 24 }}
-            >
-              <Text type="secondary" style={{ fontSize: 15 }}>
-                На этой неделе нет заданий в расписании
-              </Text>
-            </Card>
-          )}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: isWideDesktop ? 'repeat(2, 1fr)' : '1fr',
+            gap: 12,
+            alignItems: 'start',
+          }}
+        >
+          {days.map((day) => renderDayCard(day))}
         </div>
+      )}
+
+      {/* Summary if no assignments at all */}
+      {!isLoading && days && days.length > 0 && !hasAssignments && (
+        <Card
+          style={{ marginTop: 12, borderRadius: 12, textAlign: 'center' }}
+          bodyStyle={{ padding: 20 }}
+        >
+          <Text type="secondary" style={{ fontSize: 14 }}>
+            На этой неделе нет заданий в расписании
+          </Text>
+        </Card>
       )}
 
       {/* Assignment detail drawer */}

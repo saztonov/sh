@@ -97,9 +97,11 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
    * GET /scraper/auto-login-available - check if GOOGLE_EMAIL is configured in scraper env.
    * Returns { available: boolean }.
    */
-  fastify.get('/scraper/auto-login-available', async (_request, reply) => {
-    // Check if the env vars are set in the current process
-    const available = !!(process.env.GOOGLE_EMAIL && process.env.GOOGLE_PASSWORD);
+  fastify.get('/scraper/auto-login-available', async (request, reply) => {
+    const hasEmail = !!process.env.GOOGLE_EMAIL;
+    const hasPassword = !!process.env.GOOGLE_PASSWORD;
+    const available = hasEmail && hasPassword;
+    request.log.info({ hasEmail, hasPassword, available }, 'Auto-login availability check');
     return reply.send({ data: { available } });
   });
 

@@ -209,8 +209,10 @@ export async function captureSession(): Promise<{ success: boolean; error?: stri
     });
 
     logger.info('Navigating to Google Classroom for session capture...');
-    await page.goto('https://classroom.google.com');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto('https://classroom.google.com', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
+    });
     await page.waitForTimeout(3000);
 
     const initialUrl = page.url();
@@ -405,8 +407,10 @@ export async function captureSessionAuto(): Promise<{ success: boolean; error?: 
     const page = await context.newPage();
 
     logger.info('Navigating to Google Classroom for auto-login...');
-    await page.goto('https://classroom.google.com');
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto('https://classroom.google.com', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
+    });
     await page.waitForTimeout(3000);
 
     logger.info({ url: page.url() }, 'Initial page URL');
@@ -469,8 +473,10 @@ export async function validateSession(): Promise<'valid' | 'invalid' | 'no_sessi
     const { context } = launched;
     const page = await context.newPage();
 
-    await page.goto('https://classroom.google.com', { timeout: 30_000 });
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto('https://classroom.google.com', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
+    });
 
     // Wait for page to settle (redirects, JS rendering)
     await page.waitForTimeout(5000);

@@ -16,48 +16,46 @@ export interface RawAssignmentItem {
 }
 
 /**
- * Collect `li.MHxtic` items from currently expanded allowed sections via page.evaluate.
+ * Collect assignment items (text + link) from currently expanded allowed sections
+ * in a single page.evaluate pass. This ensures the text and href are always paired.
  */
-async function collectSectionItems(page: Page): Promise<string[]> {
+async function collectItemsFromExpandedSections(
+  page: Page,
+): Promise<Array<{ text: string; href: string }>> {
   return page.evaluate((allowedSections: string[]) => {
-    const results: string[] = [];
+    const results: Array<{ text: string; href: string }> = [];
+    const seen = new Set<string>();
     const sections = Array.from(document.querySelectorAll('div.ovsVve.jlxRme'));
 
     for (const sec of sections) {
-      const text = sec.innerText || '';
-      if (!allowedSections.some((s) => text.includes(s))) continue;
+      const sectionText = (sec as HTMLElement).innerText || '';
+      if (!allowedSections.some((s) => sectionText.includes(s))) continue;
       if (sec.getAttribute('aria-expanded') !== 'true') continue;
 
-      sec.querySelectorAll('li.MHxtic').forEach((item) => {
-        const t = (item as HTMLElement).innerText.trim();
-        if (t && !results.includes(t)) results.push(t);
-      });
+      const items = sec.querySelectorAll('li.MHxtic');
+      for (const item of items) {
+        const text = (item as HTMLElement).innerText.trim();
+        if (!text || seen.has(text)) continue;
+        seen.add(text);
+
+        // Extract the link from the same item
+        const linkEl = item.querySelector('a.PsLuqe');
+        let href = '';
+        if (linkEl) {
+          const rawHref = linkEl.getAttribute('href') || '';
+          href = rawHref.startsWith('http')
+            ? rawHref
+            : rawHref
+              ? `https://classroom.google.com${rawHref}`
+              : '';
+        }
+
+        results.push({ text, href });
+      }
     }
 
     return results;
   }, [...ALLOWED_SECTIONS]);
-}
-
-/**
- * Extract links and their associated raw text from expanded assignment items.
- */
-async function collectAssignmentLinks(page: Page): Promise<Map<string, string>> {
-  const linkMap = new Map<string, string>();
-
-  const items = await page.$$(SELECTORS.assignmentItem);
-  for (const item of items) {
-    const link = await item.$(SELECTORS.assignmentLink);
-    if (!link) continue;
-
-    const href = await link.getAttribute('href');
-    const text = await item.innerText();
-
-    if (href && text) {
-      linkMap.set(text.trim(), href.startsWith('http') ? href : `https://classroom.google.com${href}`);
-    }
-  }
-
-  return linkMap;
 }
 
 /**
@@ -71,67 +69,92 @@ function extractClassroomId(url: string): string | null {
 }
 
 /**
+ * Extract the profile number from a Classroom URL.
+ * e.g. "https://classroom.google.com/u/2/h" -> "2"
+ */
+export function extractProfileNumber(url: string): string {
+  const match = url.match(/classroom\.google\.com\/u\/(\d+)/);
+  return match ? match[1] : '0';
+}
+
+/**
  * Navigate to the assignment list page, expand relevant sections, and collect
  * all assignment items with their metadata.
  *
  * @param page - An authenticated Playwright page
  * @param courseNames - List of known course names for matching
+ * @param profileNumber - Google account profile number (e.g. "0", "1")
  * @returns Array of raw assignment items
  */
 export async function fetchAssignmentList(
   page: Page,
   courseNames: string[],
+  profileNumber: string = '0',
 ): Promise<RawAssignmentItem[]> {
-  logger.info('Navigating to assignment list...');
-  await page.goto('https://classroom.google.com/u/0/a/not-turned-in/all');
+  const assignmentsUrl = `https://classroom.google.com/u/${profileNumber}/a/not-turned-in/all`;
+  logger.info({ url: assignmentsUrl }, 'Navigating to assignment list...');
+  await page.goto(assignmentsUrl);
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(4000);
 
-  const allRawItems: string[] = [];
+  const currentUrl = page.url();
+  logger.info({ url: currentUrl }, 'Assignment list page loaded');
 
-  // Collect items from already-expanded sections
-  const alreadyOpen = await collectSectionItems(page);
+  const allItems: Array<{ text: string; href: string }> = [];
+
+  // Step 1: Collect items from already-expanded sections
+  const alreadyOpen = await collectItemsFromExpandedSections(page);
   if (alreadyOpen.length > 0) {
     logger.info({ count: alreadyOpen.length }, 'Items in already-expanded sections');
-    allRawItems.push(...alreadyOpen);
+    allItems.push(...alreadyOpen);
   }
 
-  // Expand collapsed allowed sections and collect their items
+  // Step 2: Expand collapsed allowed sections and collect their items
   const sectionDivs = await page.$$(SELECTORS.sectionHeader);
+  logger.info({ totalSections: sectionDivs.length }, 'Found section divs on page');
+
   for (const div of sectionDivs) {
     try {
       const text = (await div.innerText()).trim();
       const expanded = await div.getAttribute('aria-expanded');
       const isNeeded = ALLOWED_SECTIONS.some((s) => text.includes(s));
 
+      logger.info(
+        { section: text.slice(0, 40), expanded, isNeeded },
+        'Section found',
+      );
+
       if (!isNeeded || expanded === 'true') continue;
 
+      // Try to find a button inside, otherwise click the div itself
       const btn = await div.$('button');
-      if (!btn) continue;
+      if (btn) {
+        logger.info({ section: text.slice(0, 30) }, 'Clicking button in section');
+        await btn.click();
+      } else {
+        logger.info({ section: text.slice(0, 30) }, 'No button found, clicking section div');
+        await div.click();
+      }
+      await page.waitForTimeout(1500);
 
-      logger.info({ section: text.slice(0, 30) }, 'Expanding section');
-      await btn.click();
-      await page.waitForTimeout(1000);
-
-      // Collect items while section is open
-      const items = await collectSectionItems(page);
-      const newItems = items.filter((i) => !allRawItems.includes(i));
-      logger.info({ count: newItems.length }, 'New items from section');
-      allRawItems.push(...newItems);
+      // Collect items from the newly expanded section
+      const items = await collectItemsFromExpandedSections(page);
+      const newItems = items.filter(
+        (item) => !allItems.some((existing) => existing.text === item.text),
+      );
+      logger.info({ count: newItems.length, section: text.slice(0, 30) }, 'New items from expanded section');
+      allItems.push(...newItems);
     } catch (err) {
       logger.error({ err }, 'Error expanding section');
     }
   }
 
-  logger.info({ total: allRawItems.length }, 'Total raw items collected');
+  logger.info({ total: allItems.length }, 'Total raw items collected');
 
-  // Collect links for URL extraction
-  const linkMap = await collectAssignmentLinks(page);
-
-  // Parse each raw item
+  // Step 3: Parse each raw item
   const assignments: RawAssignmentItem[] = [];
 
-  for (const raw of allRawItems) {
+  for (const { text: raw, href } of allItems) {
     // Find the matching course name within the raw text
     const matchedCourse = courseNames.find((c) => raw.includes(c));
     if (!matchedCourse) {
@@ -147,21 +170,20 @@ export async function fetchAssignmentList(
 
     if (!title) continue;
 
-    // Try to find the URL from linkMap
-    let classroomUrl = '';
-    for (const [key, url] of linkMap) {
-      if (key.includes(title) && key.includes(matchedCourse)) {
-        classroomUrl = url;
-        break;
-      }
-    }
+    const classroomUrl = href;
+    const classroomId = classroomUrl ? extractClassroomId(classroomUrl) : null;
+
+    logger.info(
+      { title: title.slice(0, 50), hasUrl: !!classroomUrl, classroomId },
+      'Parsed assignment item',
+    );
 
     assignments.push({
       title,
       courseName: matchedCourse,
       dueRaw,
       classroomUrl,
-      classroomId: classroomUrl ? extractClassroomId(classroomUrl) : null,
+      classroomId,
     });
   }
 

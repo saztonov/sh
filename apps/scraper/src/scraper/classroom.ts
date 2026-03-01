@@ -21,7 +21,7 @@ import { supabase } from '../db.js';
 import { logger } from '../logger.js';
 import { launchBrowser, saveBrowserState, closeBrowser } from './browser.js';
 import { SELECTORS, EXCLUDED_TITLES } from './selectors.js';
-import { fetchAssignmentList } from './assignments.js';
+import { fetchAssignmentList, extractProfileNumber } from './assignments.js';
 import { fetchAssignmentDetail } from './assignment-detail.js';
 import { downloadAndUploadAttachment } from './attachments.js';
 import { resolveSubject } from '../parsers/course-name.js';
@@ -34,19 +34,28 @@ interface ScrapeResult {
 
 /**
  * Fetch course cards from the Google Classroom homepage.
+ * Returns the list of course names and the detected profile number.
  */
-async function fetchCourses(page: Page): Promise<string[]> {
+async function fetchCourses(page: Page): Promise<{ courseNames: string[]; profileNumber: string }> {
   logger.info('Navigating to Google Classroom homepage...');
-  await page.goto('https://classroom.google.com/u/0/h');
-  await page.waitForLoadState('domcontentloaded');
+  await page.goto('https://classroom.google.com', {
+    waitUntil: 'domcontentloaded',
+    timeout: 60_000,
+  });
 
   await page.waitForTimeout(3000);
 
   // Check if we're on a login page (not authenticated)
   const url = page.url();
-  if (url.includes('accounts.google.com') || !url.includes('classroom.google.com/u/')) {
+  logger.info({ url }, 'Homepage URL after navigation');
+
+  if (url.includes('accounts.google.com') || !url.includes('classroom.google.com')) {
     throw new Error('No valid Google Classroom session. Use "Войти в Google Classroom" button in Settings to capture a session first.');
   }
+
+  // Detect profile number from URL (e.g. /u/0/, /u/1/, etc.)
+  const profileNumber = extractProfileNumber(url);
+  logger.info({ profileNumber }, 'Detected Google profile number');
 
   const courseCards = await page.$$(SELECTORS.courseCard);
   const seen = new Set<string>();
@@ -60,8 +69,8 @@ async function fetchCourses(page: Page): Promise<string[]> {
     }
   }
 
-  logger.info({ count: courseNames.length }, 'Found courses on homepage');
-  return courseNames;
+  logger.info({ count: courseNames.length, courses: courseNames }, 'Found courses on homepage');
+  return { courseNames, profileNumber };
 }
 
 /**
@@ -168,11 +177,11 @@ export async function runScrape(runId?: string): Promise<void> {
     const page = await context.newPage();
 
     // Step 1: Fetch and upsert courses
-    const courseNames = await fetchCourses(page);
+    const { courseNames, profileNumber } = await fetchCourses(page);
     const courseIdMap = await upsertCourses(courseNames, courseMappings);
 
     // Step 2: Fetch assignment list
-    const rawAssignments = await fetchAssignmentList(page, courseNames);
+    const rawAssignments = await fetchAssignmentList(page, courseNames, profileNumber);
 
     let assignmentsFound = rawAssignments.length;
     let assignmentsNew = 0;
@@ -199,9 +208,9 @@ export async function runScrape(runId?: string): Promise<void> {
         }
 
         if (existingAssignment) {
-          logger.debug(
+          logger.info(
             { title: raw.title, classroomId: raw.classroomId },
-            'Assignment already exists, skipping',
+            'Assignment already exists, skipping (duplicate)',
           );
           continue;
         }
@@ -209,14 +218,33 @@ export async function runScrape(runId?: string): Promise<void> {
         // Fetch detail page for new assignments
         let detail = null;
         if (raw.classroomUrl) {
+          logger.info(
+            { title: raw.title, url: raw.classroomUrl },
+            'Navigating to assignment detail page',
+          );
           try {
             detail = await fetchAssignmentDetail(page, raw.classroomUrl);
+            logger.info(
+              {
+                title: raw.title,
+                hasDescription: !!detail.description,
+                descriptionLength: detail.description?.length ?? 0,
+                attachmentCount: detail.attachments.length,
+                author: detail.author,
+              },
+              'Fetched assignment detail successfully',
+            );
           } catch (detailErr) {
             logger.warn(
               { err: detailErr, url: raw.classroomUrl },
               'Failed to fetch assignment detail, using list data',
             );
           }
+        } else {
+          logger.warn(
+            { title: raw.title },
+            'No classroom URL for assignment, skipping detail page',
+          );
         }
 
         // Parse due date
@@ -285,7 +313,12 @@ export async function runScrape(runId?: string): Promise<void> {
         }
 
         logger.info(
-          { title: raw.title, classroomId: raw.classroomId },
+          {
+            title: raw.title,
+            classroomId: raw.classroomId,
+            attachments: detail?.attachments?.length ?? 0,
+            dueDate,
+          },
           'Processed new assignment',
         );
       } catch (assignmentErr) {

@@ -4,6 +4,14 @@ import { authMiddleware } from '../middleware/auth.js';
 import type { ScrapeRun } from '@homework/shared';
 
 const scraperRoutes: FastifyPluginAsync = async (fastify) => {
+  // Diagnostic log: check if auto-login env vars are available
+  const hasGoogleEmail = !!process.env.GOOGLE_EMAIL;
+  const hasGooglePassword = !!process.env.GOOGLE_PASSWORD;
+  fastify.log.info(
+    { hasGoogleEmail, hasGooglePassword },
+    'Scraper routes registered — auto-login env vars status',
+  );
+
   fastify.addHook('preHandler', authMiddleware);
 
   /**

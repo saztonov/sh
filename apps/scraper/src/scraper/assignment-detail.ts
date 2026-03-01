@@ -56,14 +56,24 @@ export async function fetchAssignmentDetail(
   await page.goto(url);
   await page.waitForLoadState('domcontentloaded');
 
-  // Wait for the page to render meaningful content (h1 = title)
+  // Wait for page content to fully render.
+  // Google Classroom loads description via XHR AFTER initial DOM.
+  // Use waitForFunction with a string (safe from esbuild __name injection).
   try {
-    await page.locator('h1').first().waitFor({ timeout: 10_000 });
+    await page.waitForFunction(
+      `!!document.querySelector('[guidedhelp="assignmentInstructionsGH"]')?.innerText?.trim()`,
+      undefined,
+      { timeout: 10_000 },
+    );
   } catch {
-    /* page might not have h1 — continue anyway */
+    // Description might not exist — wait for at least h1 as fallback
+    try {
+      await page.locator('h1').first().waitFor({ timeout: 5_000 });
+    } catch {
+      /* continue anyway */
+    }
   }
-  // Extra wait for dynamic content (description loads after DOM)
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(500);
 
   // --- Title: h1 that doesn't start with "Класс" ---
   let title = '';
@@ -152,22 +162,22 @@ export async function fetchAssignmentDetail(
   let description: string | null = null;
 
   // Approach 1 (best): guidedhelp="assignmentInstructionsGH" — stable semantic attribute
+  // The waitForFunction at page load already waited for this element's text.
   try {
     const instructionsLocator = page.locator('[guidedhelp="assignmentInstructionsGH"]');
-    // Wait for the element to appear — it loads dynamically after DOM
-    await instructionsLocator.waitFor({ timeout: 5_000 });
-    const text = (await instructionsLocator.innerText()).trim();
-    if (text.length > 0) {
-      description = text;
+    if ((await instructionsLocator.count()) > 0) {
+      const text = (await instructionsLocator.innerText()).trim();
+      if (text.length > 0) {
+        description = text;
+      }
     }
 
-    logger.debug(
+    logger.info(
       { found: !!description, length: description?.length ?? 0 },
       'Description search: assignmentInstructionsGH',
     );
-  } catch {
-    // Element not found within timeout — assignment may not have a description
-    logger.debug('Description search: assignmentInstructionsGH element not found');
+  } catch (err) {
+    logger.info({ err }, 'Description search: error reading assignmentInstructionsGH');
   }
 
   // Approach 2: dir="ltr" or dir="auto" elements

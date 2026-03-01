@@ -115,7 +115,7 @@ const AppLayout: React.FC = () => {
                 href={String(item.key)}
               >
                 {'icon' in item && item.icon}
-                <span>{typeof item.label === 'string' ? item.label : ''}</span>
+                <span>{'label' in item && typeof item.label === 'string' ? item.label : ''}</span>
               </a>
             );
           })}

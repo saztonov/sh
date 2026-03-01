@@ -11,7 +11,8 @@
       "Bash(npm run build)",
       "Bash(npx -w apps/scraper tsc --noEmit)",
       "Bash(npm run build:scraper)",
-      "Bash(npm run build -w apps/api)"
+      "Bash(npm run build -w apps/api)",
+      "Bash(npm run build -w apps/web)"
     ]
   }
 }

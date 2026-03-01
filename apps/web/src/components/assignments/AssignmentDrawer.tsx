@@ -32,6 +32,7 @@ import {
   getSubjectColor,
   formatFileSize,
 } from '../../lib/format';
+import api from '../../lib/api';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -61,6 +62,24 @@ const AssignmentDrawer: React.FC<AssignmentDrawerProps> = ({ assignmentId, open,
     return <FileOutlined />;
   };
 
+  const handleDownload = async (att: Attachment) => {
+    try {
+      const response = await api.get(`/files/${att.id}/download`, {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(response.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = att.original_name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch {
+      window.open(att.s3_url, '_blank');
+    }
+  };
+
   const renderAttachment = (attachment: Attachment) => {
     const isImage = attachment.mime_type?.startsWith('image/');
     const isPdf = attachment.mime_type === 'application/pdf';
@@ -76,11 +95,14 @@ const AssignmentDrawer: React.FC<AssignmentDrawerProps> = ({ assignmentId, open,
                 ({formatFileSize(attachment.size_bytes)})
               </Text>
             )}
-            <a href={attachment.s3_url} target="_blank" rel="noopener noreferrer" download>
-              <Button type="link" size="small" icon={<DownloadOutlined />}>
-                Скачать
-              </Button>
-            </a>
+            <Button
+              type="link"
+              size="small"
+              icon={<DownloadOutlined />}
+              onClick={() => handleDownload(attachment)}
+            >
+              Скачать
+            </Button>
           </Space>
 
           {/* Inline image preview */}

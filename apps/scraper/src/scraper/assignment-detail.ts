@@ -38,6 +38,41 @@ export async function fetchAssignmentDetail(
   await page.waitForLoadState('domcontentloaded');
   await page.waitForTimeout(2000);
 
+  // DOM diagnostic: log key elements to help identify correct selectors
+  const domDiag = await page.evaluate(() => {
+    const headings = Array.from(document.querySelectorAll('h1, h2, h3')).map((el, i) => ({
+      tag: el.tagName,
+      index: i,
+      className: el.className.slice(0, 60),
+      text: (el as HTMLElement).innerText.trim().slice(0, 80),
+    }));
+
+    // Look for elements that might contain description text
+    const descCandidates = Array.from(document.querySelectorAll('[data-placeholder], [contenteditable], .oBSRLe, [dir="ltr"]'))
+      .filter((el) => (el as HTMLElement).innerText?.trim())
+      .slice(0, 5)
+      .map((el) => ({
+        tag: el.tagName,
+        className: el.className.slice(0, 60),
+        text: (el as HTMLElement).innerText.trim().slice(0, 100),
+      }));
+
+    // Attachment container candidates
+    const attachCandidates = Array.from(document.querySelectorAll('.QRiHXd, [data-drive-id], a[href*="drive.google.com"], a[href*="docs.google.com"]'))
+      .slice(0, 5)
+      .map((el) => ({
+        tag: el.tagName,
+        className: el.className.slice(0, 60),
+        href: el.getAttribute('href')?.slice(0, 80) ?? null,
+        text: (el as HTMLElement).innerText?.trim().slice(0, 60) ?? '',
+        ariaLabel: el.getAttribute('aria-label')?.slice(0, 60) ?? null,
+      }));
+
+    return { headings, descCandidates, attachCandidates };
+  });
+
+  logger.info({ domDiag }, 'DOM diagnostic for assignment detail page');
+
   // Title
   const titleEl = await page.$(SELECTORS.detailTitle);
   const title = titleEl ? (await titleEl.innerText()).trim() : '';

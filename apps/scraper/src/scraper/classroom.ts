@@ -195,7 +195,9 @@ export async function runScrape(runId?: string): Promise<void> {
           continue;
         }
 
-        // Check if assignment already exists (by classroom_id or fallback by course+title)
+        // Check if assignment already exists — two-level dedup:
+        // 1) By classroom_id (if available)
+        // 2) Fallback by course_id + title (always, if step 1 found nothing)
         type ExistingRow = { id: string; description: string | null } | null;
         let existingAssignment: ExistingRow = null;
 
@@ -207,8 +209,10 @@ export async function runScrape(runId?: string): Promise<void> {
             .limit(1)
             .maybeSingle();
           existingAssignment = data as ExistingRow;
-        } else {
-          // Fallback: check by course_id + title when classroom_id is unavailable
+        }
+
+        // Fallback: check by course_id + title (handles old records with null classroom_id)
+        if (!existingAssignment) {
           const { data } = await supabase
             .from('assignments')
             .select('id, description')
@@ -284,7 +288,7 @@ export async function runScrape(runId?: string): Promise<void> {
             .update({
               classroom_id: raw.classroomId || undefined,
               classroom_url: raw.classroomUrl || undefined,
-              title: detail?.title || raw.title,
+              title: raw.title,
               description: detail?.description ?? null,
               author: detail?.author ?? null,
               points: detail?.points ?? null,
@@ -310,7 +314,7 @@ export async function runScrape(runId?: string): Promise<void> {
               course_id: courseId,
               classroom_id: raw.classroomId,
               classroom_url: raw.classroomUrl || null,
-              title: detail?.title || raw.title,
+              title: raw.title,
               description: detail?.description ?? null,
               author: detail?.author ?? null,
               points: detail?.points ?? null,

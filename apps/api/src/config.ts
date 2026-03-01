@@ -1,5 +1,9 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import { z } from 'zod';
+
+// Load .env from monorepo root (CWD is apps/api when running via workspace)
+dotenv.config({ path: '../../.env' });
+dotenv.config(); // also try CWD for standalone runs
 
 const envSchema = z.object({
   SUPABASE_URL: z.string().url(),

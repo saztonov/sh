@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
 
-dotenv.config();
+// Load .env from monorepo root (CWD is apps/scraper when running via workspace)
+dotenv.config({ path: '../../.env' });
+dotenv.config(); // also try CWD for standalone runs
 
 function requireEnv(name: string): string {
   const value = process.env[name];

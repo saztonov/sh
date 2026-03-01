@@ -64,7 +64,7 @@ const AssignmentDrawer: React.FC<AssignmentDrawerProps> = ({ assignmentId, open,
 
   const handleDownload = async (att: Attachment) => {
     try {
-      const response = await api.get(`/files/${att.id}/download`, {
+      const response = await api.get(`/api/files/${att.id}/download`, {
         responseType: 'blob',
       });
       const url = window.URL.createObjectURL(response.data);

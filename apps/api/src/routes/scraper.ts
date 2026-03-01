@@ -50,6 +50,60 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   /**
+   * POST /scraper/force-save-session - signal the scraper to save current browser session immediately.
+   * Creates a scrape_run with status 'force_save' that captureSession() loop picks up.
+   */
+  fastify.post('/scraper/force-save-session', async (request, reply) => {
+    const { data, error } = await supabase
+      .from('scrape_runs')
+      .insert({
+        status: 'force_save',
+        started_at: new Date().toISOString(),
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      request.log.error(error, 'Failed to trigger force save');
+      return reply.code(500).send({ error: 'Failed to trigger force save' });
+    }
+
+    return reply.code(201).send({ data: data as ScrapeRun });
+  });
+
+  /**
+   * POST /scraper/auto-login - insert a scrape_run with status 'auto_login'.
+   * The scraper attempts to log in automatically using GOOGLE_EMAIL / GOOGLE_PASSWORD.
+   */
+  fastify.post('/scraper/auto-login', async (request, reply) => {
+    const { data, error } = await supabase
+      .from('scrape_runs')
+      .insert({
+        status: 'auto_login',
+        started_at: new Date().toISOString(),
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      request.log.error(error, 'Failed to trigger auto-login');
+      return reply.code(500).send({ error: 'Failed to trigger auto-login' });
+    }
+
+    return reply.code(201).send({ data: data as ScrapeRun });
+  });
+
+  /**
+   * GET /scraper/auto-login-available - check if GOOGLE_EMAIL is configured in scraper env.
+   * Returns { available: boolean }.
+   */
+  fastify.get('/scraper/auto-login-available', async (_request, reply) => {
+    // Check if the env vars are set in the current process
+    const available = !!(process.env.GOOGLE_EMAIL && process.env.GOOGLE_PASSWORD);
+    return reply.send({ data: { available } });
+  });
+
+  /**
    * GET /scraper/session-status - check if a valid session file exists
    * Returns: { status: 'valid' | 'invalid' | 'no_session' | 'unknown', checked_at: string | null }
    */
@@ -65,14 +119,23 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
       .limit(1)
       .single();
 
-    // Check if there's a pending capture_session
+    // Check if there's a pending capture_session, auto_login, or running session capture
     const { data: pendingCapture } = await supabase
       .from('scrape_runs')
-      .select('id')
-      .eq('status', 'capture_session')
+      .select('id, status')
+      .in('status', ['capture_session', 'auto_login', 'force_save'])
       .limit(1);
 
-    const isCapturing = pendingCapture && pendingCapture.length > 0;
+    // Also check if a capture is currently running
+    const { data: runningCapture } = await supabase
+      .from('scrape_runs')
+      .select('id')
+      .eq('status', 'running')
+      .limit(1);
+
+    const isCapturing =
+      (pendingCapture && pendingCapture.length > 0) ||
+      (runningCapture && runningCapture.length > 0);
 
     // Try to determine session status from the latest successful scrape or capture
     // If the last run was successful, session is likely valid

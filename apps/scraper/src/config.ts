@@ -39,6 +39,10 @@ export const config = {
     headless: optionalEnv('PLAYWRIGHT_HEADLESS', 'true') === 'true',
     channel: optionalEnv('BROWSER_CHANNEL', 'chrome'),
   },
+  google: {
+    email: process.env.GOOGLE_EMAIL ?? '',
+    password: process.env.GOOGLE_PASSWORD ?? '',
+  },
 } as const;
 
 export type Config = typeof config;

@@ -9,7 +9,7 @@ import { config } from '../config.js';
 import { supabase } from '../db.js';
 import { logger } from '../logger.js';
 import { runScrape } from '../scraper/classroom.js';
-import { captureSession, validateSession } from '../scraper/browser.js';
+import { captureSession, captureSessionAuto, validateSession } from '../scraper/browser.js';
 
 let isRunning = false;
 
@@ -31,9 +31,12 @@ async function guardedScrape(runId?: string): Promise<void> {
 }
 
 /**
- * Handle a capture_session request: open visible browser for Google login.
+ * Handle a session capture request (manual or auto-login).
  */
-async function handleCaptureSession(runId: string): Promise<void> {
+async function handleSessionCapture(
+  runId: string,
+  mode: 'capture_session' | 'auto_login',
+): Promise<void> {
   if (isRunning) {
     logger.warn('Another operation in progress, skipping session capture');
     return;
@@ -47,7 +50,9 @@ async function handleCaptureSession(runId: string): Promise<void> {
       .update({ status: 'running', started_at: new Date().toISOString() })
       .eq('id', runId);
 
-    const result = await captureSession();
+    const result = mode === 'auto_login'
+      ? await captureSessionAuto()
+      : await captureSession();
 
     if (result.success) {
       await supabase
@@ -58,7 +63,7 @@ async function handleCaptureSession(runId: string): Promise<void> {
           error_message: null,
         })
         .eq('id', runId);
-      logger.info({ runId }, 'Session capture completed successfully');
+      logger.info({ runId, mode }, 'Session capture completed successfully');
     } else {
       await supabase
         .from('scrape_runs')
@@ -68,7 +73,7 @@ async function handleCaptureSession(runId: string): Promise<void> {
           error_message: result.error ?? 'Session capture failed',
         })
         .eq('id', runId);
-      logger.error({ runId, error: result.error }, 'Session capture failed');
+      logger.error({ runId, mode, error: result.error }, 'Session capture failed');
     }
   } finally {
     isRunning = false;
@@ -126,11 +131,12 @@ export function setupPendingRunsPoller(): NodeJS.Timeout {
     if (isRunning) return;
 
     try {
-      // Find the oldest pending or capture_session run
+      // Find the oldest pending, capture_session, or auto_login run
+      // Note: force_save is handled inside captureSession() loop
       const { data: pendingRuns } = await supabase
         .from('scrape_runs')
         .select('id, status')
-        .in('status', ['pending', 'capture_session'])
+        .in('status', ['pending', 'capture_session', 'auto_login'])
         .order('started_at', { ascending: true })
         .limit(1);
 
@@ -139,9 +145,9 @@ export function setupPendingRunsPoller(): NodeJS.Timeout {
         const runId = run.id as string;
         const status = run.status as string;
 
-        if (status === 'capture_session') {
-          logger.info({ runId }, 'Found capture_session request, starting');
-          await handleCaptureSession(runId);
+        if (status === 'capture_session' || status === 'auto_login') {
+          logger.info({ runId, status }, 'Found session capture request, starting');
+          await handleSessionCapture(runId, status as 'capture_session' | 'auto_login');
         } else {
           logger.info({ runId }, 'Found pending scrape run, starting');
           await guardedScrape(runId);

@@ -26,6 +26,8 @@ import {
   ClockCircleOutlined,
   LoginOutlined,
   QuestionCircleOutlined,
+  SaveOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -38,6 +40,9 @@ import {
   useTriggerScrape,
   useSessionStatus,
   useCaptureSession,
+  useForceSaveSession,
+  useAutoLogin,
+  useAutoLoginAvailable,
 } from '../hooks/useCourses';
 import { useIsMobile } from '../hooks/useMediaQuery';
 
@@ -227,7 +232,25 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
   const { data: runs, isLoading, error } = useScrapeRuns();
   const triggerScrape = useTriggerScrape();
   const captureSession = useCaptureSession();
-  const { data: sessionStatus } = useSessionStatus();
+  const forceSaveSession = useForceSaveSession();
+  const autoLoginMutation = useAutoLogin();
+  const { data: autoLoginAvailable } = useAutoLoginAvailable();
+
+  const lastRun = runs?.[0] ?? null;
+  const isRunning =
+    lastRun?.status === 'pending' || lastRun?.status === 'running';
+
+  // Determine isCapturing early so we can pass it to useSessionStatus
+  const isCapturingFromRuns =
+    lastRun?.status === 'capture_session' || lastRun?.status === 'auto_login';
+
+  const { data: sessionStatus } = useSessionStatus(isCapturingFromRuns);
+
+  const isCapturing =
+    sessionStatus?.is_capturing || isCapturingFromRuns;
+
+  const sessionNeedsLogin =
+    sessionStatus?.status === 'invalid' || sessionStatus?.status === 'no_session';
 
   const handleTrigger = async () => {
     if (sessionStatus && sessionStatus.status !== 'valid' && sessionStatus.status !== 'unknown') {
@@ -251,15 +274,23 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
     }
   };
 
-  const lastRun = runs?.[0] ?? null;
-  const isRunning =
-    lastRun?.status === 'pending' || lastRun?.status === 'running';
-  const isCapturing =
-    sessionStatus?.is_capturing ||
-    lastRun?.status === 'capture_session';
+  const handleForceSave = async () => {
+    try {
+      await forceSaveSession.mutateAsync();
+      messageApi.success('Запрос на сохранение сессии отправлен');
+    } catch {
+      messageApi.error('Не удалось отправить запрос на сохранение');
+    }
+  };
 
-  const sessionNeedsLogin =
-    sessionStatus?.status === 'invalid' || sessionStatus?.status === 'no_session';
+  const handleAutoLogin = async () => {
+    try {
+      await autoLoginMutation.mutateAsync();
+      messageApi.success('Автоматический вход запущен...');
+    } catch {
+      messageApi.error('Не удалось запустить автоматический вход');
+    }
+  };
 
   const getStatusTag = (status: ScrapeRun['status']) => {
     switch (status) {
@@ -291,6 +322,18 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
         return (
           <Tag icon={<LoginOutlined />} color="warning">
             Вход в Classroom
+          </Tag>
+        );
+      case 'auto_login':
+        return (
+          <Tag icon={<RobotOutlined />} color="warning">
+            Автологин
+          </Tag>
+        );
+      case 'force_save':
+        return (
+          <Tag icon={<SaveOutlined />} color="warning">
+            Сохранение сессии
           </Tag>
         );
       default:
@@ -383,14 +426,41 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
             )}
           </div>
 
-          <Button
-            icon={isCapturing ? <LoadingOutlined spin /> : <LoginOutlined />}
-            onClick={handleCaptureSession}
-            loading={captureSession.isPending}
-            disabled={isCapturing || isRunning}
-          >
-            {isCapturing ? 'Ожидание входа...' : 'Войти в Google Classroom'}
-          </Button>
+          <Space size="small" wrap>
+            <Button
+              icon={isCapturing ? <LoadingOutlined spin /> : <LoginOutlined />}
+              onClick={handleCaptureSession}
+              loading={captureSession.isPending}
+              disabled={isCapturing || isRunning}
+            >
+              {isCapturing ? 'Ожидание входа...' : 'Войти в Google Classroom'}
+            </Button>
+
+            {isCapturing && (
+              <Tooltip title="Нажмите, когда видите курсы в открытом браузере">
+                <Button
+                  icon={<SaveOutlined />}
+                  onClick={handleForceSave}
+                  loading={forceSaveSession.isPending}
+                >
+                  Сохранить сессию
+                </Button>
+              </Tooltip>
+            )}
+
+            {autoLoginAvailable && (
+              <Tooltip title="Автоматический вход по сохранённым данным">
+                <Button
+                  icon={<RobotOutlined />}
+                  onClick={handleAutoLogin}
+                  loading={autoLoginMutation.isPending}
+                  disabled={isCapturing || isRunning}
+                >
+                  Автологин
+                </Button>
+              </Tooltip>
+            )}
+          </Space>
         </Space>
       </Card>
 

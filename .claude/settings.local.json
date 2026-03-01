@@ -4,7 +4,10 @@
       "Bash(npm install -D concurrently)",
       "Bash(npx tsc -p packages/shared/tsconfig.json --noEmit)",
       "Bash(npx tsc --noEmit)",
-      "Bash(npx tsc)"
+      "Bash(npx tsc)",
+      "Bash(npx tsc --noEmit -p apps/scraper/tsconfig.json)",
+      "Bash(npx tsc --noEmit -p apps/api/tsconfig.json)",
+      "Bash(npx tsc --noEmit -p apps/web/tsconfig.json)"
     ]
   }
 }

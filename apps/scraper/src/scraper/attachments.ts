@@ -101,9 +101,12 @@ export async function downloadAndUploadAttachment(
     const mimeType =
       response.headers()['content-type'] ?? guessMimeType(fileName);
 
-    // Sanitise the filename for S3 keys
-    const sanitisedName = fileName.replace(/[^a-zA-Z0-9_.\-\u0400-\u04FF]/g, '_');
-    const s3Key = `attachments/${assignmentId}/${sanitisedName}`;
+    // S3 key: ASCII-only to avoid presigned URL issues with Cyrillic on Cloud.ru
+    // Original name is preserved in DB (attachments.original_name)
+    const ext = fileName.match(/\.(\w+)$/)?.[1] || 'bin';
+    const ts = Date.now().toString(36);
+    const rand = Math.random().toString(36).slice(2, 6);
+    const s3Key = `attachments/${assignmentId}/${ts}_${rand}.${ext}`;
 
     const result = await uploadToS3(s3Key, buffer, mimeType);
 

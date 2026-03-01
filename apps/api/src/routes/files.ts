@@ -25,7 +25,7 @@ const fileRoutes: FastifyPluginAsync = async (fastify) => {
 
     const typed = attachment as Attachment;
 
-    const url = await getPresignedUrl(typed.s3_key);
+    const url = await getPresignedUrl(typed.s3_key, 3600, typed.original_name);
 
     return {
       url,

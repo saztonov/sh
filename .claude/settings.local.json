@@ -10,7 +10,8 @@
       "Bash(npx tsc --noEmit -p apps/web/tsconfig.json)",
       "Bash(npm run build)",
       "Bash(npx -w apps/scraper tsc --noEmit)",
-      "Bash(npm run build:scraper)"
+      "Bash(npm run build:scraper)",
+      "Bash(npm run build -w apps/api)"
     ]
   }
 }

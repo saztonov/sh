@@ -55,7 +55,15 @@ export async function fetchAssignmentDetail(
 
   await page.goto(url);
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(2000);
+
+  // Wait for the page to render meaningful content (h1 = title)
+  try {
+    await page.locator('h1').first().waitFor({ timeout: 10_000 });
+  } catch {
+    /* page might not have h1 — continue anyway */
+  }
+  // Extra wait for dynamic content (description loads after DOM)
+  await page.waitForTimeout(1500);
 
   // --- Title: h1 that doesn't start with "Класс" ---
   let title = '';
@@ -146,11 +154,11 @@ export async function fetchAssignmentDetail(
   // Approach 1 (best): guidedhelp="assignmentInstructionsGH" — stable semantic attribute
   try {
     const instructionsLocator = page.locator('[guidedhelp="assignmentInstructionsGH"]');
-    if ((await instructionsLocator.count()) > 0) {
-      const text = (await instructionsLocator.innerText()).trim();
-      if (text.length > 0) {
-        description = text;
-      }
+    // Wait for the element to appear — it loads dynamically after DOM
+    await instructionsLocator.waitFor({ timeout: 5_000 });
+    const text = (await instructionsLocator.innerText()).trim();
+    if (text.length > 0) {
+      description = text;
     }
 
     logger.debug(
@@ -158,7 +166,8 @@ export async function fetchAssignmentDetail(
       'Description search: assignmentInstructionsGH',
     );
   } catch {
-    /* empty */
+    // Element not found within timeout — assignment may not have a description
+    logger.debug('Description search: assignmentInstructionsGH element not found');
   }
 
   // Approach 2: dir="ltr" or dir="auto" elements

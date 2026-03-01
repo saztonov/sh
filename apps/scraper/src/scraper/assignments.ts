@@ -67,7 +67,7 @@ async function collectItemsFromExpandedSections(
  * or: https://classroom.google.com/u/0/c/COURSE_ID/a/ASSIGNMENT_ID/details
  */
 function extractClassroomId(url: string): string | null {
-  const match = url.match(/\/a\/(\d+)\//);
+  const match = url.match(/\/a\/([^/]+)\//);
   return match ? match[1] : null;
 }
 
@@ -128,6 +128,14 @@ export async function fetchAssignmentList(
       );
 
       if (!isNeeded || expanded === 'true') continue;
+
+      // Parse item count from section text (e.g. "Следующая неделя\n0\nРазвернуть")
+      const countMatch = text.match(/\n(\d+)\n/);
+      const itemCount = countMatch ? parseInt(countMatch[1], 10) : -1;
+      if (itemCount === 0) {
+        logger.info({ section: text.slice(0, 30) }, 'Skipping empty section (0 items)');
+        continue;
+      }
 
       // Try to find a button inside, otherwise click the div itself
       const btn = await div.$('button');

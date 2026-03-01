@@ -196,37 +196,50 @@ export async function runScrape(runId?: string): Promise<void> {
         }
 
         // Check if assignment already exists (by classroom_id or fallback by course+title)
-        let existingAssignment: { id: string } | null = null;
+        type ExistingRow = { id: string; description: string | null } | null;
+        let existingAssignment: ExistingRow = null;
 
         if (raw.classroomId) {
           const { data } = await supabase
             .from('assignments')
-            .select('id')
+            .select('id, description')
             .eq('classroom_id', raw.classroomId)
             .limit(1)
             .maybeSingle();
-          existingAssignment = data as { id: string } | null;
+          existingAssignment = data as ExistingRow;
         } else {
           // Fallback: check by course_id + title when classroom_id is unavailable
           const { data } = await supabase
             .from('assignments')
-            .select('id')
+            .select('id, description')
             .eq('course_id', courseId)
             .eq('title', raw.title)
             .limit(1)
             .maybeSingle();
-          existingAssignment = data as { id: string } | null;
+          existingAssignment = data as ExistingRow;
         }
 
-        if (existingAssignment) {
+        // If assignment exists and already has details — skip entirely
+        if (existingAssignment && existingAssignment.description !== null) {
           logger.info(
             { title: raw.title, classroomId: raw.classroomId },
-            'Assignment already exists, skipping (duplicate)',
+            'Assignment already exists with details, skipping',
           );
           continue;
         }
 
-        // Fetch detail page for new assignments
+        // Determine if this is an update of an incomplete record or a new insert
+        const isUpdate = existingAssignment !== null;
+        const existingId = existingAssignment?.id;
+
+        if (isUpdate) {
+          logger.info(
+            { title: raw.title, id: existingId },
+            'Updating incomplete assignment (no description)',
+          );
+        }
+
+        // Fetch detail page
         let detail = null;
         if (raw.classroomUrl) {
           logger.info(
@@ -262,36 +275,64 @@ export async function runScrape(runId?: string): Promise<void> {
         const dueRaw = detail?.dueDate ?? raw.dueRaw;
         const dueDate = parseDueDate(dueRaw);
 
-        // Insert assignment
-        const { data: inserted, error: insertError } = await supabase
-          .from('assignments')
-          .insert({
-            course_id: courseId,
-            classroom_id: raw.classroomId,
-            classroom_url: raw.classroomUrl || null,
-            title: detail?.title || raw.title,
-            description: detail?.description ?? null,
-            author: detail?.author ?? null,
-            points: detail?.points ?? null,
-            due_date: dueDate,
-            due_raw: dueRaw,
-            status: 'not_turned_in',
-            is_completed: false,
-            scraped_at: new Date().toISOString(),
-          })
-          .select('id')
-          .single();
+        let assignmentId: string;
 
-        if (insertError || !inserted) {
-          logger.error(
-            { error: insertError, title: raw.title },
-            'Failed to insert assignment',
-          );
-          continue;
+        if (isUpdate && existingId) {
+          // Update existing incomplete assignment with details
+          const { error: updateError } = await supabase
+            .from('assignments')
+            .update({
+              classroom_id: raw.classroomId || undefined,
+              classroom_url: raw.classroomUrl || undefined,
+              title: detail?.title || raw.title,
+              description: detail?.description ?? null,
+              author: detail?.author ?? null,
+              points: detail?.points ?? null,
+              due_date: dueDate,
+              due_raw: dueRaw,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingId);
+
+          if (updateError) {
+            logger.error(
+              { error: updateError, title: raw.title },
+              'Failed to update assignment',
+            );
+            continue;
+          }
+          assignmentId = existingId;
+        } else {
+          // Insert new assignment
+          const { data: inserted, error: insertError } = await supabase
+            .from('assignments')
+            .insert({
+              course_id: courseId,
+              classroom_id: raw.classroomId,
+              classroom_url: raw.classroomUrl || null,
+              title: detail?.title || raw.title,
+              description: detail?.description ?? null,
+              author: detail?.author ?? null,
+              points: detail?.points ?? null,
+              due_date: dueDate,
+              due_raw: dueRaw,
+              status: 'not_turned_in',
+              is_completed: false,
+              scraped_at: new Date().toISOString(),
+            })
+            .select('id')
+            .single();
+
+          if (insertError || !inserted) {
+            logger.error(
+              { error: insertError, title: raw.title },
+              'Failed to insert assignment',
+            );
+            continue;
+          }
+          assignmentId = inserted.id as string;
+          assignmentsNew++;
         }
-
-        const assignmentId = inserted.id as string;
-        assignmentsNew++;
 
         // Download and upload attachments
         if (detail?.attachments && detail.attachments.length > 0) {
@@ -329,8 +370,9 @@ export async function runScrape(runId?: string): Promise<void> {
             classroomId: raw.classroomId,
             attachments: detail?.attachments?.length ?? 0,
             dueDate,
+            isUpdate,
           },
-          'Processed new assignment',
+          isUpdate ? 'Updated assignment with details' : 'Processed new assignment',
         );
       } catch (assignmentErr) {
         logger.error(

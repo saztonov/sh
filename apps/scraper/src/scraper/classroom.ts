@@ -39,6 +39,14 @@ async function fetchCourses(page: Page): Promise<string[]> {
   logger.info('Navigating to Google Classroom homepage...');
   await page.goto('https://classroom.google.com/u/0/h');
   await page.waitForLoadState('domcontentloaded');
+
+  // If redirected to Google login — wait for manual login (up to 5 minutes)
+  if (page.url().includes('accounts.google.com')) {
+    logger.warn('Google login page detected — please log in manually in the browser window (5 min timeout)');
+    await page.waitForURL('**/classroom.google.com/**', { timeout: 300_000 });
+    logger.info('Login successful, continuing...');
+  }
+
   await page.waitForTimeout(3000);
 
   const courseCards = await page.$$(SELECTORS.courseCard);

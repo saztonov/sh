@@ -76,6 +76,24 @@ export async function closeBrowser(browser: Browser): Promise<void> {
 }
 
 /**
+ * Check if the user is actually logged in to Google Classroom
+ * by looking for course cards on the page (not just URL).
+ * Google Classroom may show a "Sign in" button on classroom.google.com
+ * without redirecting to accounts.google.com.
+ */
+async function isLoggedInToClassroom(page: import('playwright').Page): Promise<boolean> {
+  // Check for course cards — these only appear when logged in
+  const courseCards = await page.$$('div.GRvzhf.YVvGBb');
+  if (courseCards.length > 0) return true;
+
+  // Also check for the user avatar/profile button as a sign of being logged in
+  const profileBtn = await page.$('a[aria-label*="Google Account"], img.gb_A, img.gb_za');
+  if (profileBtn) return true;
+
+  return false;
+}
+
+/**
  * Capture a Google Classroom session interactively.
  * Opens visible browser, navigates to Classroom, waits for user to log in (up to 10 min),
  * saves session, and closes the browser. Does NOT scrape any data.
@@ -93,27 +111,40 @@ export async function captureSession(): Promise<{ success: boolean; error?: stri
     logger.info('Navigating to Google Classroom for session capture...');
     await page.goto('https://classroom.google.com/u/0/h');
     await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(3000);
 
-    // Check if already logged in
-    if (!page.url().includes('accounts.google.com')) {
+    // Check if already logged in by looking for actual classroom content
+    if (await isLoggedInToClassroom(page)) {
       logger.info('Already logged in to Google Classroom');
       await saveBrowserState(context);
       await closeBrowser(browser);
       return { success: true };
     }
 
-    // Wait for user to complete login (up to 10 minutes)
-    logger.info('Google login page detected — waiting for manual login (10 min timeout)...');
+    // Not logged in — wait for user to complete login (up to 10 minutes)
+    // Poll every 3 seconds for classroom content to appear
+    logger.info('Not logged in — waiting for manual login (10 min timeout)...');
 
-    try {
-      await page.waitForURL('**/classroom.google.com/**', { timeout: 600_000 });
-    } catch {
+    const deadline = Date.now() + 600_000; // 10 minutes
+    let loggedIn = false;
+
+    while (Date.now() < deadline) {
+      await page.waitForTimeout(3000);
+
+      // Check if we landed on the classroom page with actual content
+      if (await isLoggedInToClassroom(page)) {
+        loggedIn = true;
+        break;
+      }
+    }
+
+    if (!loggedIn) {
       await closeBrowser(browser);
       return { success: false, error: 'Login timeout — browser was open for 10 minutes without successful login' };
     }
 
-    // Wait a bit for page to fully load after redirect
-    await page.waitForTimeout(3000);
+    // Wait a bit for page to fully settle
+    await page.waitForTimeout(2000);
 
     logger.info('Login successful, saving session...');
     await saveBrowserState(context);
@@ -151,14 +182,23 @@ export async function validateSession(): Promise<'valid' | 'invalid' | 'no_sessi
     await page.goto('https://classroom.google.com/u/0/h', { timeout: 30_000 });
     await page.waitForLoadState('domcontentloaded');
 
-    // Small wait for any redirects
-    await page.waitForTimeout(2000);
+    // Wait for page to settle (redirects, JS rendering)
+    await page.waitForTimeout(5000);
 
+    // Check URL first (may redirect to accounts.google.com)
     const isLoginPage = page.url().includes('accounts.google.com');
+    if (isLoginPage) {
+      await closeBrowser(browser);
+      logger.info('Session is invalid — redirected to login');
+      return 'invalid';
+    }
+
+    // Also check for actual classroom content
+    const loggedIn = await isLoggedInToClassroom(page);
     await closeBrowser(browser);
 
-    if (isLoginPage) {
-      logger.info('Session is invalid — redirected to login');
+    if (!loggedIn) {
+      logger.info('Session is invalid — no classroom content found');
       return 'invalid';
     }
 

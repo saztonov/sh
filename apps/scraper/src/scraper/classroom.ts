@@ -40,14 +40,15 @@ async function fetchCourses(page: Page): Promise<string[]> {
   await page.goto('https://classroom.google.com/u/0/h');
   await page.waitForLoadState('domcontentloaded');
 
-  // If redirected to Google login — fail immediately (session must be captured separately)
-  if (page.url().includes('accounts.google.com')) {
-    throw new Error('No valid Google Classroom session. Use "Войти в Google Classroom" button in Settings to capture a session first.');
-  }
-
   await page.waitForTimeout(3000);
 
+  // Check if we're on a login page (URL redirect or Sign-in button on classroom.google.com)
+  const isLoginUrl = page.url().includes('accounts.google.com');
   const courseCards = await page.$$(SELECTORS.courseCard);
+
+  if (isLoginUrl || courseCards.length === 0) {
+    throw new Error('No valid Google Classroom session. Use "Войти в Google Classroom" button in Settings to capture a session first.');
+  }
   const seen = new Set<string>();
   const courseNames: string[] = [];
 

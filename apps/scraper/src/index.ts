@@ -6,12 +6,31 @@
  * - Sets up polling for manually-triggered scrape runs
  * - Optionally runs an immediate scrape when --now flag is passed
  */
-import { config } from './config.js';
 import { logger } from './logger.js';
-import { setupCronSchedule, setupPendingRunsPoller } from './scheduler/cron.js';
-import { runScrape } from './scraper/classroom.js';
 
 async function main(): Promise<void> {
+  // Validate config — if env vars are missing, log warning and keep running
+  let config: typeof import('./config.js').config;
+  try {
+    config = (await import('./config.js')).config;
+  } catch (err) {
+    logger.warn({ err }, 'Scraper config incomplete — running in standby mode. Fix .env and restart.');
+    // Keep process alive so it doesn't crash other dev services
+    await new Promise(() => {});
+    return;
+  }
+
+  // Check that Playwright is available
+  try {
+    await import('playwright');
+  } catch {
+    logger.warn('Playwright not installed. Run: npx playwright install chromium');
+    logger.warn('Scraper running in standby mode — will poll for pending runs but cannot scrape.');
+  }
+
+  const { setupCronSchedule, setupPendingRunsPoller } = await import('./scheduler/cron.js');
+  const { runScrape } = await import('./scraper/classroom.js');
+
   logger.info({
     cron: config.scrape.cron,
     headless: config.playwright.headless,
@@ -21,7 +40,7 @@ async function main(): Promise<void> {
   // Set up scheduled scraping via cron
   const cronTask = setupCronSchedule();
 
-  // Set up polling for pending scrape runs
+  // Set up polling for pending scrape runs (triggered from web UI)
   const pollInterval = setupPendingRunsPoller();
 
   // Run an immediate scrape if --now flag is passed

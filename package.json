@@ -7,7 +7,7 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspaces --if-present",
+    "dev": "npm run dev -w packages/shared -w apps/api -w apps/web -w apps/scraper",
     "dev:api": "npm run dev -w apps/api",
     "dev:web": "npm run dev -w apps/web",
     "dev:scraper": "npm run dev -w apps/scraper",

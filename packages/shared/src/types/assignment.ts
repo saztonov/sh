@@ -11,6 +11,7 @@ export interface Assignment {
   due_raw: string | null;
   status: AssignmentStatus;
   is_completed: boolean;
+  source?: 'google' | 'eljur' | null;
   scraped_at: string;
   created_at: string;
   updated_at: string;

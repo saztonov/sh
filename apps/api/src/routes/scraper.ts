@@ -7,12 +7,17 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
   // Diagnostic log: check if auto-login env vars are available
   const hasGoogleEmail = !!process.env.GOOGLE_EMAIL;
   const hasGooglePassword = !!process.env.GOOGLE_PASSWORD;
+  const hasEljurVendor = !!process.env.ELJUR_VENDOR;
+  const hasEljurLogin = !!process.env.ELJUR_LOGIN;
+  const hasEljurPassword = !!process.env.ELJUR_PASSWORD;
   fastify.log.info(
-    { hasGoogleEmail, hasGooglePassword },
+    { hasGoogleEmail, hasGooglePassword, hasEljurVendor, hasEljurLogin, hasEljurPassword },
     'Scraper routes registered — auto-login env vars status',
   );
 
   fastify.addHook('preHandler', authMiddleware);
+
+  // ─── Google Classroom endpoints ───
 
   /**
    * POST /scraper/trigger - insert a new scrape_run with status 'pending'
@@ -23,6 +28,7 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
       .insert({
         status: 'pending',
         started_at: new Date().toISOString(),
+        source: 'google',
       })
       .select('*')
       .single();
@@ -37,7 +43,6 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
    * POST /scraper/capture-session - insert a scrape_run with status 'capture_session'
-   * The scraper process picks this up and opens a visible browser for login.
    */
   fastify.post('/scraper/capture-session', async (request, reply) => {
     const { data, error } = await supabase
@@ -45,6 +50,7 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
       .insert({
         status: 'capture_session',
         started_at: new Date().toISOString(),
+        source: 'google',
       })
       .select('*')
       .single();
@@ -59,7 +65,6 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
    * POST /scraper/force-save-session - signal the scraper to save current browser session immediately.
-   * Creates a scrape_run with status 'force_save' that captureSession() loop picks up.
    */
   fastify.post('/scraper/force-save-session', async (request, reply) => {
     const { data, error } = await supabase
@@ -67,6 +72,7 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
       .insert({
         status: 'force_save',
         started_at: new Date().toISOString(),
+        source: 'google',
       })
       .select('*')
       .single();
@@ -81,7 +87,6 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
 
   /**
    * POST /scraper/auto-login - insert a scrape_run with status 'auto_login'.
-   * The scraper attempts to log in automatically using GOOGLE_EMAIL / GOOGLE_PASSWORD.
    */
   fastify.post('/scraper/auto-login', async (request, reply) => {
     const { data, error } = await supabase
@@ -89,6 +94,7 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
       .insert({
         status: 'auto_login',
         started_at: new Date().toISOString(),
+        source: 'google',
       })
       .select('*')
       .single();
@@ -102,54 +108,44 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   /**
-   * GET /scraper/auto-login-available - check if GOOGLE_EMAIL is configured in scraper env.
-   * Returns { available: boolean }.
+   * GET /scraper/auto-login-available - check if GOOGLE_EMAIL is configured.
    */
   fastify.get('/scraper/auto-login-available', async (request, reply) => {
-    const hasEmail = !!process.env.GOOGLE_EMAIL;
-    const hasPassword = !!process.env.GOOGLE_PASSWORD;
-    const available = hasEmail && hasPassword;
-    request.log.info({ hasEmail, hasPassword, available }, 'Auto-login availability check');
+    const available = hasGoogleEmail && hasGooglePassword;
+    request.log.info({ available }, 'Google auto-login availability check');
     return reply.send({ data: { available } });
   });
 
   /**
-   * GET /scraper/session-status - check if a valid session file exists
-   * Returns: { status: 'valid' | 'invalid' | 'no_session' | 'unknown', checked_at: string | null }
+   * GET /scraper/session-status - Google Classroom session status.
    */
   fastify.get('/scraper/session-status', async (_request, reply) => {
-    // Check the latest session validation result from scrape_runs
-    // A capture_session run with status 'success' means session was captured.
-    // We also look at the last validation check stored as a special scrape_run.
     const { data: lastCapture } = await supabase
       .from('scrape_runs')
       .select('*')
       .in('status', ['success', 'error'])
+      .or('source.is.null,source.eq.google')
       .order('finished_at', { ascending: false })
       .limit(1)
       .single();
 
-    // Check if there's a pending capture_session, auto_login, or running session capture
     const { data: pendingCapture } = await supabase
       .from('scrape_runs')
       .select('id, status')
       .in('status', ['capture_session', 'auto_login', 'force_save'])
       .limit(1);
 
-    // Also check if a capture is currently running
     const { data: runningCapture } = await supabase
       .from('scrape_runs')
-      .select('id')
+      .select('id, source')
       .eq('status', 'running')
+      .or('source.is.null,source.eq.google')
       .limit(1);
 
     const isCapturing =
       (pendingCapture && pendingCapture.length > 0) ||
       (runningCapture && runningCapture.length > 0);
 
-    // Try to determine session status from the latest successful scrape or capture
-    // If the last run was successful, session is likely valid
-    // If error with 'login' or 'session' in message, session is likely invalid
     let sessionStatus: 'valid' | 'invalid' | 'no_session' | 'unknown' = 'unknown';
     let checkedAt: string | null = null;
 
@@ -171,6 +167,136 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
+  // ─── Eljur endpoints ───
+
+  /**
+   * POST /scraper/eljur/capture-session
+   */
+  fastify.post('/scraper/eljur/capture-session', async (request, reply) => {
+    const { data, error } = await supabase
+      .from('scrape_runs')
+      .insert({
+        status: 'eljur_capture_session',
+        started_at: new Date().toISOString(),
+        source: 'eljur',
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      request.log.error(error, 'Failed to trigger Eljur session capture');
+      return reply.code(500).send({ error: 'Failed to trigger Eljur session capture' });
+    }
+
+    return reply.code(201).send({ data: data as ScrapeRun });
+  });
+
+  /**
+   * POST /scraper/eljur/force-save-session
+   */
+  fastify.post('/scraper/eljur/force-save-session', async (request, reply) => {
+    const { data, error } = await supabase
+      .from('scrape_runs')
+      .insert({
+        status: 'eljur_force_save',
+        started_at: new Date().toISOString(),
+        source: 'eljur',
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      request.log.error(error, 'Failed to trigger Eljur force save');
+      return reply.code(500).send({ error: 'Failed to trigger Eljur force save' });
+    }
+
+    return reply.code(201).send({ data: data as ScrapeRun });
+  });
+
+  /**
+   * POST /scraper/eljur/auto-login
+   */
+  fastify.post('/scraper/eljur/auto-login', async (request, reply) => {
+    const { data, error } = await supabase
+      .from('scrape_runs')
+      .insert({
+        status: 'eljur_auto_login',
+        started_at: new Date().toISOString(),
+        source: 'eljur',
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      request.log.error(error, 'Failed to trigger Eljur auto-login');
+      return reply.code(500).send({ error: 'Failed to trigger Eljur auto-login' });
+    }
+
+    return reply.code(201).send({ data: data as ScrapeRun });
+  });
+
+  /**
+   * GET /scraper/eljur/auto-login-available
+   */
+  fastify.get('/scraper/eljur/auto-login-available', async (request, reply) => {
+    const available = hasEljurVendor && hasEljurLogin && hasEljurPassword;
+    request.log.info({ available }, 'Eljur auto-login availability check');
+    return reply.send({ data: { available } });
+  });
+
+  /**
+   * GET /scraper/eljur/session-status
+   */
+  fastify.get('/scraper/eljur/session-status', async (_request, reply) => {
+    const { data: lastCapture } = await supabase
+      .from('scrape_runs')
+      .select('*')
+      .in('status', ['success', 'error'])
+      .eq('source', 'eljur')
+      .order('finished_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    const { data: pendingCapture } = await supabase
+      .from('scrape_runs')
+      .select('id, status')
+      .in('status', ['eljur_capture_session', 'eljur_auto_login', 'eljur_force_save'])
+      .limit(1);
+
+    const { data: runningCapture } = await supabase
+      .from('scrape_runs')
+      .select('id')
+      .eq('status', 'running')
+      .eq('source', 'eljur')
+      .limit(1);
+
+    const isCapturing =
+      (pendingCapture && pendingCapture.length > 0) ||
+      (runningCapture && runningCapture.length > 0);
+
+    let sessionStatus: 'valid' | 'invalid' | 'no_session' | 'unknown' = 'unknown';
+    let checkedAt: string | null = null;
+
+    if (lastCapture) {
+      checkedAt = lastCapture.finished_at;
+      if (lastCapture.status === 'success') {
+        sessionStatus = 'valid';
+      } else if (lastCapture.error_message?.toLowerCase().includes('session')) {
+        sessionStatus = 'invalid';
+      }
+    }
+
+    return reply.send({
+      data: {
+        status: sessionStatus,
+        checked_at: checkedAt,
+        is_capturing: isCapturing,
+      },
+    });
+  });
+
+  // ─── Common endpoints ───
+
   /**
    * GET /scraper/status - return the latest scrape_run
    */
@@ -183,7 +309,6 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
       .single();
 
     if (error) {
-      // If no rows exist, single() returns an error, handle gracefully
       if (error.code === 'PGRST116') {
         return { data: null };
       }

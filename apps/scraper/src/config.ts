@@ -43,6 +43,12 @@ export const config = {
     email: process.env.GOOGLE_EMAIL ?? '',
     password: process.env.GOOGLE_PASSWORD ?? '',
   },
+  eljur: {
+    vendor: process.env.ELJUR_VENDOR ?? '',
+    login: process.env.ELJUR_LOGIN ?? '',
+    password: process.env.ELJUR_PASSWORD ?? '',
+    statePath: optionalEnv('ELJUR_STATE_PATH', './state/eljur_state.json'),
+  },
 } as const;
 
 export type Config = typeof config;

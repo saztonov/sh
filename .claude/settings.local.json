@@ -14,7 +14,10 @@
       "Bash(npm run build -w apps/api)",
       "Bash(npm run build -w apps/web)",
       "Bash(npx tsc --noEmit --project apps/web/tsconfig.json)",
-      "Bash(npm run build --workspace=apps/web)"
+      "Bash(npm run build --workspace=apps/web)",
+      "Bash(npx tsc --noEmit -p packages/shared/tsconfig.json)",
+      "Bash(npx tsc --noEmit -p apps/web/tsconfig.app.json)",
+      "Bash(npm run build -w packages/shared)"
     ]
   }
 }

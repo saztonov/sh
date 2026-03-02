@@ -10,6 +10,7 @@ import { supabase } from '../db.js';
 import { logger } from '../logger.js';
 import { runScrape } from '../scraper/classroom.js';
 import { captureSession, captureSessionAuto, validateSession } from '../scraper/browser.js';
+import { captureEljurSession, captureEljurSessionAuto, validateEljurSession } from '../scraper/eljur-browser.js';
 
 let isRunning = false;
 
@@ -25,6 +26,55 @@ async function guardedScrape(runId?: string): Promise<void> {
   isRunning = true;
   try {
     await runScrape(runId);
+  } finally {
+    isRunning = false;
+  }
+}
+
+/**
+ * Handle an Eljur session capture request (manual or auto-login).
+ */
+async function handleEljurSessionCapture(
+  runId: string,
+  mode: 'eljur_capture_session' | 'eljur_auto_login',
+): Promise<void> {
+  if (isRunning) {
+    logger.warn('Another operation in progress, skipping Eljur session capture');
+    return;
+  }
+
+  isRunning = true;
+  try {
+    await supabase
+      .from('scrape_runs')
+      .update({ status: 'running', started_at: new Date().toISOString() })
+      .eq('id', runId);
+
+    const result = mode === 'eljur_auto_login'
+      ? await captureEljurSessionAuto()
+      : await captureEljurSession();
+
+    if (result.success) {
+      await supabase
+        .from('scrape_runs')
+        .update({
+          status: 'success',
+          finished_at: new Date().toISOString(),
+          error_message: null,
+        })
+        .eq('id', runId);
+      logger.info({ runId, mode }, 'Eljur session capture completed successfully');
+    } else {
+      await supabase
+        .from('scrape_runs')
+        .update({
+          status: 'error',
+          finished_at: new Date().toISOString(),
+          error_message: result.error ?? 'Eljur session capture failed',
+        })
+        .eq('id', runId);
+      logger.error({ runId, mode, error: result.error }, 'Eljur session capture failed');
+    }
   } finally {
     isRunning = false;
   }
@@ -106,9 +156,15 @@ export function setupSessionValidationCron(): cron.ScheduledTask {
     logger.info('Running scheduled session validation');
     try {
       const status = await validateSession();
-      logger.info({ sessionStatus: status }, 'Session validation result');
+      logger.info({ sessionStatus: status }, 'Google Classroom session validation result');
     } catch (err) {
-      logger.error({ err }, 'Session validation cron failed');
+      logger.error({ err }, 'Google Classroom session validation cron failed');
+    }
+    try {
+      const eljurStatus = await validateEljurSession();
+      logger.info({ sessionStatus: eljurStatus }, 'Eljur session validation result');
+    } catch (err) {
+      logger.error({ err }, 'Eljur session validation cron failed');
     }
   });
 
@@ -136,7 +192,7 @@ export function setupPendingRunsPoller(): NodeJS.Timeout {
       const { data: pendingRuns } = await supabase
         .from('scrape_runs')
         .select('id, status')
-        .in('status', ['pending', 'capture_session', 'auto_login'])
+        .in('status', ['pending', 'capture_session', 'auto_login', 'eljur_capture_session', 'eljur_auto_login'])
         .order('started_at', { ascending: true })
         .limit(1);
 
@@ -145,7 +201,10 @@ export function setupPendingRunsPoller(): NodeJS.Timeout {
         const runId = run.id as string;
         const status = run.status as string;
 
-        if (status === 'capture_session' || status === 'auto_login') {
+        if (status === 'eljur_capture_session' || status === 'eljur_auto_login') {
+          logger.info({ runId, status }, 'Found Eljur session capture request, starting');
+          await handleEljurSessionCapture(runId, status as 'eljur_capture_session' | 'eljur_auto_login');
+        } else if (status === 'capture_session' || status === 'auto_login') {
           logger.info({ runId, status }, 'Found session capture request, starting');
           await handleSessionCapture(runId, status as 'capture_session' | 'auto_login');
         } else {

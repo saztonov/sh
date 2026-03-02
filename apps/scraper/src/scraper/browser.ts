@@ -25,14 +25,15 @@ function getLaunchOptions(headless: boolean) {
 /**
  * Launch browser and create a context with saved authentication state.
  */
-export async function launchBrowser(overrideHeadless?: boolean): Promise<{
+export async function launchBrowser(overrideHeadless?: boolean, statePath?: string): Promise<{
   browser: Browser;
   context: BrowserContext;
 }> {
   const headless = overrideHeadless ?? config.playwright.headless;
+  const resolvedStatePath = statePath ?? config.playwright.statePath;
 
   logger.info(
-    { headless, channel: config.playwright.channel, statePath: config.playwright.statePath },
+    { headless, channel: config.playwright.channel, statePath: resolvedStatePath },
     'Launching browser',
   );
 
@@ -41,12 +42,12 @@ export async function launchBrowser(overrideHeadless?: boolean): Promise<{
   const contextOptions: Parameters<Browser['newContext']>[0] = {};
 
   // Load saved storage state if it exists
-  if (existsSync(config.playwright.statePath)) {
-    contextOptions.storageState = config.playwright.statePath;
+  if (existsSync(resolvedStatePath)) {
+    contextOptions.storageState = resolvedStatePath;
     logger.info('Loaded saved browser state');
   } else {
     logger.warn(
-      { path: config.playwright.statePath },
+      { path: resolvedStatePath },
       'No saved browser state found',
     );
   }
@@ -59,9 +60,10 @@ export async function launchBrowser(overrideHeadless?: boolean): Promise<{
 /**
  * Save the current browser context storage state (cookies, localStorage).
  */
-export async function saveBrowserState(context: BrowserContext): Promise<void> {
-  await context.storageState({ path: config.playwright.statePath });
-  logger.info({ path: config.playwright.statePath }, 'Saved browser state');
+export async function saveBrowserState(context: BrowserContext, statePath?: string): Promise<void> {
+  const resolvedPath = statePath ?? config.playwright.statePath;
+  await context.storageState({ path: resolvedPath });
+  logger.info({ path: resolvedPath }, 'Saved browser state');
 }
 
 /**

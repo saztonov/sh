@@ -178,3 +178,88 @@ export function useAutoLoginAvailable() {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+// ─── Eljur hooks ───
+
+/**
+ * Fetch Eljur session status.
+ */
+export function useEljurSessionStatus(isCapturing?: boolean) {
+  return useQuery({
+    queryKey: ['eljur-session-status'],
+    queryFn: async () => {
+      const { data } = await api.get<SessionStatusResponse>('/api/scraper/eljur/session-status');
+      return data.data;
+    },
+    staleTime: isCapturing ? 3 * 1000 : 30 * 1000,
+    refetchInterval: isCapturing ? 5 * 1000 : 15 * 1000,
+  });
+}
+
+/**
+ * Trigger Eljur session capture (opens browser for manual login).
+ */
+export function useEljurCaptureSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<ScrapeRunResponse>('/api/scraper/eljur/capture-session');
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scrape-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['eljur-session-status'] });
+    },
+  });
+}
+
+/**
+ * Force-save the current Eljur browser session.
+ */
+export function useEljurForceSaveSession() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<ScrapeRunResponse>('/api/scraper/eljur/force-save-session');
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scrape-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['eljur-session-status'] });
+    },
+  });
+}
+
+/**
+ * Trigger automatic Eljur login using saved credentials.
+ */
+export function useEljurAutoLogin() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<ScrapeRunResponse>('/api/scraper/eljur/auto-login');
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scrape-runs'] });
+      queryClient.invalidateQueries({ queryKey: ['eljur-session-status'] });
+    },
+  });
+}
+
+/**
+ * Check if Eljur auto-login is available (ELJUR_VENDOR / ELJUR_LOGIN / ELJUR_PASSWORD configured).
+ */
+export function useEljurAutoLoginAvailable() {
+  return useQuery({
+    queryKey: ['eljur-auto-login-available'],
+    queryFn: async () => {
+      const { data } = await api.get<AutoLoginAvailableResponse>('/api/scraper/eljur/auto-login-available');
+      return data.data.available;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}

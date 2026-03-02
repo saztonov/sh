@@ -43,6 +43,11 @@ import {
   useForceSaveSession,
   useAutoLogin,
   useAutoLoginAvailable,
+  useEljurSessionStatus,
+  useEljurCaptureSession,
+  useEljurForceSaveSession,
+  useEljurAutoLogin,
+  useEljurAutoLoginAvailable,
 } from '../hooks/useCourses';
 import { useIsMobile } from '../hooks/useMediaQuery';
 
@@ -236,6 +241,12 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
   const autoLoginMutation = useAutoLogin();
   const { data: autoLoginAvailable } = useAutoLoginAvailable();
 
+  // Eljur hooks
+  const eljurCaptureSession = useEljurCaptureSession();
+  const eljurForceSaveSession = useEljurForceSaveSession();
+  const eljurAutoLoginMutation = useEljurAutoLogin();
+  const { data: eljurAutoLoginAvailable } = useEljurAutoLoginAvailable();
+
   const lastRun = runs?.[0] ?? null;
   const isRunning =
     lastRun?.status === 'pending' || lastRun?.status === 'running';
@@ -243,14 +254,21 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
   // Determine isCapturing early so we can pass it to useSessionStatus
   const isCapturingFromRuns =
     lastRun?.status === 'capture_session' || lastRun?.status === 'auto_login';
+  const isEljurCapturingFromRuns =
+    lastRun?.status === 'eljur_capture_session' || lastRun?.status === 'eljur_auto_login';
 
   const { data: sessionStatus } = useSessionStatus(isCapturingFromRuns);
+  const { data: eljurSessionStatus } = useEljurSessionStatus(isEljurCapturingFromRuns);
 
   const isCapturing =
     sessionStatus?.is_capturing || isCapturingFromRuns;
+  const isEljurCapturing =
+    eljurSessionStatus?.is_capturing || isEljurCapturingFromRuns;
 
   const sessionNeedsLogin =
     sessionStatus?.status === 'invalid' || sessionStatus?.status === 'no_session';
+  const eljurSessionNeedsLogin =
+    eljurSessionStatus?.status === 'invalid' || eljurSessionStatus?.status === 'no_session';
 
   const handleTrigger = async () => {
     if (sessionStatus && sessionStatus.status !== 'valid' && sessionStatus.status !== 'unknown') {
@@ -289,6 +307,33 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
       messageApi.success('Автоматический вход запущен...');
     } catch {
       messageApi.error('Не удалось запустить автоматический вход');
+    }
+  };
+
+  const handleEljurCaptureSession = async () => {
+    try {
+      await eljurCaptureSession.mutateAsync();
+      messageApi.success('Открывается браузер для входа в Элжур...');
+    } catch {
+      messageApi.error('Не удалось запустить захват сессии Элжур');
+    }
+  };
+
+  const handleEljurForceSave = async () => {
+    try {
+      await eljurForceSaveSession.mutateAsync();
+      messageApi.success('Запрос на сохранение сессии Элжур отправлен');
+    } catch {
+      messageApi.error('Не удалось отправить запрос на сохранение');
+    }
+  };
+
+  const handleEljurAutoLogin = async () => {
+    try {
+      await eljurAutoLoginMutation.mutateAsync();
+      messageApi.success('Автоматический вход в Элжур запущен...');
+    } catch {
+      messageApi.error('Не удалось запустить автоматический вход в Элжур');
     }
   };
 
@@ -334,6 +379,24 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
         return (
           <Tag icon={<SaveOutlined />} color="warning">
             Сохранение сессии
+          </Tag>
+        );
+      case 'eljur_capture_session':
+        return (
+          <Tag icon={<LoginOutlined />} color="warning">
+            Вход в Элжур
+          </Tag>
+        );
+      case 'eljur_auto_login':
+        return (
+          <Tag icon={<RobotOutlined />} color="warning">
+            Автологин Элжур
+          </Tag>
+        );
+      case 'eljur_force_save':
+        return (
+          <Tag icon={<SaveOutlined />} color="warning">
+            Сохранение сессии Элжур
           </Tag>
         );
       default:
@@ -463,6 +526,83 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
           </Space>
         </Space>
       </Card>
+
+      {/* Eljur session status */}
+      <Card
+        size="small"
+        style={{ marginBottom: 16, borderRadius: 8, background: '#fafafa' }}
+      >
+        <Space
+          direction={isMobile ? 'vertical' : 'horizontal'}
+          size="middle"
+          style={{ width: '100%' }}
+          align={isMobile ? 'start' : 'center'}
+        >
+          <div>
+            <Text strong style={{ marginRight: 8 }}>Сессия Элжур:</Text>
+            {eljurSessionStatus ? (
+              getSessionBadge(eljurSessionStatus.status)
+            ) : (
+              <Badge status="default" text="Загрузка..." />
+            )}
+            {eljurSessionStatus?.checked_at && (
+              <Tooltip title="Время последней проверки">
+                <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
+                  <QuestionCircleOutlined />{' '}
+                  {dayjs(eljurSessionStatus.checked_at).format('DD.MM HH:mm')}
+                </Text>
+              </Tooltip>
+            )}
+          </div>
+
+          <Space size="small" wrap>
+            <Button
+              icon={isEljurCapturing ? <LoadingOutlined spin /> : <LoginOutlined />}
+              onClick={handleEljurCaptureSession}
+              loading={eljurCaptureSession.isPending}
+              disabled={isEljurCapturing || isCapturing || isRunning}
+            >
+              {isEljurCapturing ? 'Ожидание входа...' : 'Войти в Элжур'}
+            </Button>
+
+            {isEljurCapturing && (
+              <Tooltip title="Нажмите, когда вошли в Элжур в открытом браузере">
+                <Button
+                  icon={<SaveOutlined />}
+                  onClick={handleEljurForceSave}
+                  loading={eljurForceSaveSession.isPending}
+                >
+                  Сохранить сессию
+                </Button>
+              </Tooltip>
+            )}
+
+            {eljurAutoLoginAvailable && (
+              <Tooltip title="Автоматический вход по сохранённым данным">
+                <Button
+                  icon={<RobotOutlined />}
+                  onClick={handleEljurAutoLogin}
+                  loading={eljurAutoLoginMutation.isPending}
+                  disabled={isEljurCapturing || isCapturing || isRunning}
+                >
+                  Автологин
+                </Button>
+              </Tooltip>
+            )}
+          </Space>
+        </Space>
+      </Card>
+
+      {/* Eljur session needs login warning */}
+      {eljurSessionNeedsLogin && (
+        <Alert
+          message="Требуется вход в Элжур"
+          description='Нажмите кнопку "Войти в Элжур" — откроется браузер. Войдите в свой аккаунт, после чего сессия сохранится автоматически.'
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       {/* Scrape trigger */}
       <Card

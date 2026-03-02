@@ -89,32 +89,113 @@ async function checkForEljurForceSave(): Promise<string | null> {
 }
 
 /**
+ * Log all input elements on the page for debugging selectors.
+ */
+async function logPageInputs(page: Page): Promise<void> {
+  try {
+    const inputs = await page.evaluate(() => {
+      const els = document.querySelectorAll('input, button, [role="textbox"]');
+      return Array.from(els).map((el) => ({
+        tag: el.tagName.toLowerCase(),
+        type: el.getAttribute('type'),
+        name: el.getAttribute('name'),
+        id: el.getAttribute('id'),
+        placeholder: el.getAttribute('placeholder'),
+        className: el.className?.toString().slice(0, 100),
+        visible: (el as HTMLElement).offsetParent !== null,
+      }));
+    });
+    logger.info({ inputs, count: inputs.length }, 'Eljur page inputs dump');
+  } catch (err) {
+    logger.warn({ err }, 'Failed to dump page inputs');
+  }
+}
+
+/**
  * Attempt automatic Eljur login using credentials from environment.
  */
 async function eljurAutoLogin(page: Page, vendor: string, login: string, password: string): Promise<boolean> {
   try {
     logger.info({ vendor, login }, 'Attempting automatic Eljur login...');
 
-    await page.goto(`https://${vendor}.eljur.ru/authorize`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 60_000,
-    });
+    // Navigate only if not already on the authorize page
+    const currentUrl = page.url();
+    if (!currentUrl.includes(`${vendor}.eljur.ru`)) {
+      await page.goto(`https://${vendor}.eljur.ru/authorize`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 60_000,
+      });
+    }
 
-    // Wait for the login form to render (dynamic AJAX loading)
-    const loginInput = await page.waitForSelector(
-      'input[name="login"], input[name="username"], input[type="text"][class*="login"]',
-      { timeout: 15_000 },
-    );
+    // Wait for the page to fully render (Eljur uses AJAX to load the form)
+    await page.waitForTimeout(5000);
+
+    logger.info({ url: page.url() }, 'Eljur authorize page loaded');
+
+    // Dump all inputs for debugging
+    await logPageInputs(page);
+
+    // Try multiple selector strategies for the login input
+    const loginSelectors = [
+      'input[name="login"]',
+      'input[name="username"]',
+      'input[name="LoginForm[username]"]',
+      'input[id="loginform-username"]',
+      'input[type="text"][class*="login"]',
+      'input[type="text"][placeholder*="огин"]',
+      'input[type="text"][placeholder*="оги"]',
+      'input[type="text"]:visible',
+      '#login',
+      '.auth-login input',
+      'form input[type="text"]',
+    ];
+
+    let loginInput = null;
+    for (const selector of loginSelectors) {
+      try {
+        loginInput = await page.waitForSelector(selector, { timeout: 2_000 });
+        if (loginInput) {
+          logger.info({ selector }, 'Found Eljur login input');
+          break;
+        }
+      } catch {
+        // Try next selector
+      }
+    }
+
     if (!loginInput) {
-      logger.warn('Eljur login input not found');
+      logger.warn('Eljur login input not found with any known selector');
+      // Dump page HTML for debugging
+      const html = await page.content();
+      logger.info({ htmlSnippet: html.slice(0, 3000) }, 'Eljur page HTML (first 3000 chars)');
       return false;
     }
 
     await loginInput.fill(login);
     logger.info('Eljur login entered');
 
-    // Fill password
-    const passwordInput = await page.waitForSelector('input[type="password"]', { timeout: 10_000 });
+    // Fill password — try multiple selectors
+    const passwordSelectors = [
+      'input[type="password"]',
+      'input[name="password"]',
+      'input[name="LoginForm[password]"]',
+      'input[id="loginform-password"]',
+      '#password',
+    ];
+
+    let passwordInput = null;
+    for (const selector of passwordSelectors) {
+      try {
+        passwordInput = await page.waitForSelector(selector, { timeout: 2_000 });
+        if (passwordInput) {
+          logger.info({ selector }, 'Found Eljur password input');
+          break;
+        }
+      } catch {
+        // Try next selector
+      }
+    }
+
     if (!passwordInput) {
       logger.warn('Eljur password input not found');
       return false;
@@ -123,16 +204,33 @@ async function eljurAutoLogin(page: Page, vendor: string, login: string, passwor
     await passwordInput.fill(password);
     logger.info('Eljur password entered');
 
-    // Click submit button
-    const submitButton = await page.waitForSelector(
-      'button[type="submit"], input[type="submit"], button:has-text("Войти")',
-      { timeout: 10_000 },
-    );
-    if (submitButton) {
-      await submitButton.click();
-      logger.info('Clicked Eljur login button');
-    } else {
-      // Fallback: press Enter
+    // Click submit button — try multiple selectors
+    const submitSelectors = [
+      'button[type="submit"]',
+      'input[type="submit"]',
+      'button:has-text("Войти")',
+      '.auth-button',
+      'form button',
+      '[class*="submit"]',
+    ];
+
+    let submitted = false;
+    for (const selector of submitSelectors) {
+      try {
+        const btn = await page.waitForSelector(selector, { timeout: 2_000 });
+        if (btn) {
+          await btn.click();
+          logger.info({ selector }, 'Clicked Eljur login button');
+          submitted = true;
+          break;
+        }
+      } catch {
+        // Try next selector
+      }
+    }
+
+    if (!submitted) {
+      // Fallback: press Enter on password field
       await passwordInput.press('Enter');
       logger.info('Pressed Enter to submit Eljur login form');
     }

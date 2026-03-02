@@ -241,7 +241,12 @@ async function eljurAutoLogin(page: Page, vendor: string, login: string, passwor
       logger.info({ url: page.url() }, 'Redirected after Eljur auto-login');
       return true;
     } catch {
+      // waitForURL may time out on slow Eljur redirects — check current URL
       const currentUrl = page.url();
+      if (!currentUrl.includes('/authorize') && currentUrl.includes(`${vendor}.eljur.ru`)) {
+        logger.info({ url: currentUrl }, 'Eljur redirect detected after waitForURL timeout — login succeeded');
+        return true;
+      }
       logger.warn({ url: currentUrl }, 'Did not redirect from /authorize — possible error');
       return false;
     }
@@ -430,12 +435,26 @@ export async function captureEljurSessionAuto(): Promise<{ success: boolean; err
       return { success: false, error: 'Автоматический вход в Элжур не удался. Возможные причины: CAPTCHA, неверные данные.' };
     }
 
-    // Wait for page to fully load
+    // Wait for page to fully load after redirect
+    try {
+      await page.waitForLoadState('networkidle', { timeout: 15_000 });
+    } catch {
+      // networkidle may not fire on heavy SPA pages — continue anyway
+    }
     await page.waitForTimeout(3000);
 
     if (await isLoggedInToEljur(page)) {
       await saveBrowserState(context, eljurStatePath);
       logger.info('Eljur auto-login successful, session saved');
+      await closeBrowser(browser);
+      return { success: true };
+    }
+
+    // Last resort: URL check — if on vendor domain and not /authorize, save anyway
+    const finalUrl = page.url();
+    if (!finalUrl.includes('/authorize') && finalUrl.includes(`${vendor}.eljur.ru`)) {
+      logger.info({ url: finalUrl }, 'Eljur URL looks authenticated, saving session despite DOM check failure');
+      await saveBrowserState(context, eljurStatePath);
       await closeBrowser(browser);
       return { success: true };
     }

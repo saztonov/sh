@@ -24,11 +24,14 @@ import type { Dayjs } from 'dayjs';
 import { SUBJECTS } from '@homework/shared';
 import type { AssignmentWithCourse } from '@homework/shared';
 import { useAssignments } from '../hooks/useAssignments';
+import { useScheduleSlots } from '../hooks/useSchedule';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import {
   getDueDateColor,
   getDueDateLabel,
   getSubjectColor,
+  getSourceLabel,
+  getSlotTimeForSubject,
 } from '../lib/format';
 import AssignmentDrawer from '../components/assignments/AssignmentDrawer';
 
@@ -65,6 +68,7 @@ const AssignmentsPage: React.FC = () => {
   }, [subject, completedFilter, dateRange]);
 
   const { data: response, isLoading, error } = useAssignments(filters);
+  const { data: scheduleSlots } = useScheduleSlots();
 
   const assignments = response?.data ?? [];
   const total = response?.total ?? 0;
@@ -111,6 +115,12 @@ const AssignmentsPage: React.FC = () => {
 
   const renderAssignmentItem = (assignment: AssignmentWithCourse) => {
     const subjectName = assignment.course?.subject || assignment.course?.classroom_name || '';
+    const isEljur = assignment.source === 'eljur';
+    const dayOfWeek = assignment.due_date ? dayjs(assignment.due_date).isoWeekday() : null;
+    const slotTime = !isEljur && scheduleSlots
+      ? getSlotTimeForSubject(scheduleSlots, subjectName, dayOfWeek)
+      : null;
+    const sourceLabel = getSourceLabel(assignment.source);
 
     return (
       <List.Item
@@ -152,7 +162,7 @@ const AssignmentsPage: React.FC = () => {
                   color={getSubjectColor(subjectName)}
                   style={{ borderRadius: 4, margin: 0, fontWeight: 500 }}
                 >
-                  {subjectName || 'Без предмета'}
+                  {slotTime ? `${slotTime} ${subjectName}` : subjectName || 'Без предмета'}
                 </Tag>
 
                 {assignment.due_date && (
@@ -162,6 +172,15 @@ const AssignmentsPage: React.FC = () => {
                     style={{ borderRadius: 4, margin: 0 }}
                   >
                     {getDueDateLabel(assignment.due_date)}
+                  </Tag>
+                )}
+
+                {sourceLabel && (
+                  <Tag
+                    color={isEljur ? 'purple' : 'blue'}
+                    style={{ borderRadius: 4, margin: 0, fontSize: 11 }}
+                  >
+                    {sourceLabel}
                   </Tag>
                 )}
               </Space>
@@ -336,7 +355,10 @@ const AssignmentsPage: React.FC = () => {
                     <Text strong style={{ fontSize: 13 }}>
                       {dateKey === 'no-date'
                         ? 'Без срока'
-                        : dayjs(dateKey).format('D MMMM YYYY')}
+                        : (() => {
+                            const f = dayjs(dateKey).format('dddd, D MMMM YYYY');
+                            return f.charAt(0).toUpperCase() + f.slice(1);
+                          })()}
                     </Text>
                     <Text type="secondary" style={{ fontSize: 13 }}>
                       {pluralAssignments(items.length)}

@@ -294,6 +294,7 @@ export async function runScrape(runId?: string): Promise<void> {
               points: detail?.points ?? null,
               due_date: dueDate,
               due_raw: dueRaw,
+              source: 'google',
               updated_at: new Date().toISOString(),
             })
             .eq('id', existingId);
@@ -320,6 +321,7 @@ export async function runScrape(runId?: string): Promise<void> {
               points: detail?.points ?? null,
               due_date: dueDate,
               due_raw: dueRaw,
+              source: 'google',
               status: 'not_turned_in',
               is_completed: false,
               scraped_at: new Date().toISOString(),

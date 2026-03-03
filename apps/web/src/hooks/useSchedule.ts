@@ -1,9 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import type { MergedScheduleDay } from '@homework/shared';
+import type { MergedScheduleDay, ScheduleSlot } from '@homework/shared';
 import api from '../lib/api';
 
 interface MergedScheduleResponse {
   data: MergedScheduleDay[];
+}
+
+interface ScheduleSlotsResponse {
+  data: ScheduleSlot[];
 }
 
 /**
@@ -21,5 +25,19 @@ export function useMergedSchedule(weekOffset: number) {
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
     refetchOnWindowFocus: true,
+  });
+}
+
+/**
+ * Fetch raw schedule slots (static timetable).
+ */
+export function useScheduleSlots() {
+  return useQuery<ScheduleSlot[]>({
+    queryKey: ['schedule', 'slots'],
+    queryFn: async () => {
+      const { data } = await api.get<ScheduleSlotsResponse>('/api/schedule');
+      return data.data;
+    },
+    staleTime: 10 * 60 * 1000, // 10 minutes — schedule is mostly static
   });
 }

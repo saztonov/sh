@@ -168,6 +168,7 @@ const scheduleRoutes: FastifyPluginAsync = async (fastify) => {
         dueDate: assignment.due_date,
         isCompleted: assignment.is_completed,
         status: assignment.status,
+        source: assignment.source ?? null,
       };
 
       const existing = assignmentPlacement.get(key) ?? [];

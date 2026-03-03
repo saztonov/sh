@@ -30,6 +30,7 @@ import {
   getDueDateColor,
   getDueDateLabel,
   getSubjectColor,
+  getSourceLabel,
   formatFileSize,
 } from '../../lib/format';
 import api from '../../lib/api';
@@ -198,6 +199,16 @@ const AssignmentDrawer: React.FC<AssignmentDrawerProps> = ({ assignmentId, open,
             >
               {assignment.course?.subject || assignment.course?.classroom_name || 'Предмет'}
             </Tag>
+
+            {/* Source */}
+            {getSourceLabel(assignment.source) && (
+              <Tag
+                color={assignment.source === 'eljur' ? 'purple' : 'blue'}
+                style={{ borderRadius: 4 }}
+              >
+                {getSourceLabel(assignment.source)}
+              </Tag>
+            )}
 
             {/* Due date */}
             {assignment.due_date && (

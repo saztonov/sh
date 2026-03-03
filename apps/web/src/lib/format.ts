@@ -1,4 +1,5 @@
 import dayjs from 'dayjs';
+import type { ScheduleSlot } from '@homework/shared';
 
 /**
  * Format a date string as a readable Russian date, e.g. "24 фев 2026".
@@ -130,4 +131,30 @@ const SUBJECT_COLORS: Record<string, string> = {
 export function getSubjectColor(subject: string | null | undefined): string {
   if (!subject) return '#8c8c8c';
   return SUBJECT_COLORS[subject] || '#597ef7';
+}
+
+/**
+ * Get human-readable source label.
+ */
+export function getSourceLabel(source: 'google' | 'eljur' | null | undefined): string | null {
+  if (source === 'google') return 'GGL CLASS';
+  if (source === 'eljur') return 'Элжур';
+  return null;
+}
+
+/**
+ * Find the first schedule slot for a given subject on a given day of week,
+ * and return the time range as "HH:mm–HH:mm", or null if not found.
+ */
+export function getSlotTimeForSubject(
+  slots: ScheduleSlot[],
+  subject: string | null,
+  dayOfWeek: number | null,
+): string | null {
+  if (!subject || !dayOfWeek || dayOfWeek < 1 || dayOfWeek > 5) return null;
+  const slot = slots.find(
+    (s) => s.subject === subject && s.day_of_week === dayOfWeek,
+  );
+  if (!slot?.time_start || !slot?.time_end) return null;
+  return `${slot.time_start.slice(0, 5)}\u2013${slot.time_end.slice(0, 5)}`;
 }

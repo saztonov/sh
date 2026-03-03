@@ -30,4 +30,5 @@ export interface SlotAssignment {
   dueDate: string | null;
   isCompleted: boolean;
   status: string;
+  source: 'google' | 'eljur' | null;
 }

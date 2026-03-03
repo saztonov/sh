@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, Tag, Switch, Space, Typography, List } from 'antd';
 import { CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import type { MergedSlot, SlotAssignment } from '@homework/shared';
-import { getSubjectColor, getDueDateStatus, getDueDateLabel } from '../../lib/format';
+import { getSubjectColor, getDueDateStatus, getDueDateLabel, getSourceLabel } from '../../lib/format';
 import { useToggleCompleted } from '../../hooks/useAssignments';
 
 const { Text } = Typography;
@@ -119,6 +119,14 @@ const ScheduleDayCard: React.FC<ScheduleDayCardProps> = ({ slots, onAssignmentCl
                         >
                           {a.title}
                         </Tag>
+                        {getSourceLabel(a.source) && (
+                          <Tag
+                            color={a.source === 'eljur' ? 'purple' : 'blue'}
+                            style={{ borderRadius: 2, margin: 0, fontSize: 10, lineHeight: '16px', padding: '0 4px' }}
+                          >
+                            {getSourceLabel(a.source)}
+                          </Tag>
+                        )}
                         {!a.isCompleted && getDueDateStatus(a.dueDate) === 'overdue' && (
                           <Text style={{ fontSize: 11, color: '#ff4d4f', whiteSpace: 'nowrap' }}>
                             {getDueDateLabel(a.dueDate)}

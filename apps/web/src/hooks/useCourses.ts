@@ -251,6 +251,23 @@ export function useEljurAutoLogin() {
 }
 
 /**
+ * Trigger Eljur diary scrape.
+ */
+export function useTriggerEljurScrape() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<ScrapeRunResponse>('/api/scraper/eljur/trigger');
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scrape-runs'] });
+    },
+  });
+}
+
+/**
  * Check if Eljur auto-login is available (ELJUR_VENDOR / ELJUR_LOGIN / ELJUR_PASSWORD configured).
  */
 export function useEljurAutoLoginAvailable() {

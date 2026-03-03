@@ -9,6 +9,7 @@ import { config } from '../config.js';
 import { supabase } from '../db.js';
 import { logger } from '../logger.js';
 import { runScrape } from '../scraper/classroom.js';
+import { runEljurDiaryScrape } from '../scraper/eljur-diary.js';
 import { captureSession, captureSessionAuto, validateSession } from '../scraper/browser.js';
 import { captureEljurSession, captureEljurSessionAuto, validateEljurSession } from '../scraper/eljur-browser.js';
 
@@ -75,6 +76,23 @@ async function handleEljurSessionCapture(
         .eq('id', runId);
       logger.error({ runId, mode, error: result.error }, 'Eljur session capture failed');
     }
+  } finally {
+    isRunning = false;
+  }
+}
+
+/**
+ * Handle an Eljur diary scrape request.
+ */
+async function handleEljurDiaryScrape(runId: string): Promise<void> {
+  if (isRunning) {
+    logger.warn('Another operation in progress, skipping Eljur diary scrape');
+    return;
+  }
+
+  isRunning = true;
+  try {
+    await runEljurDiaryScrape(runId);
   } finally {
     isRunning = false;
   }
@@ -192,7 +210,7 @@ export function setupPendingRunsPoller(): NodeJS.Timeout {
       const { data: pendingRuns } = await supabase
         .from('scrape_runs')
         .select('id, status')
-        .in('status', ['pending', 'capture_session', 'auto_login', 'eljur_capture_session', 'eljur_auto_login'])
+        .in('status', ['pending', 'capture_session', 'auto_login', 'eljur_capture_session', 'eljur_auto_login', 'eljur_scrape_diary'])
         .order('started_at', { ascending: true })
         .limit(1);
 
@@ -201,7 +219,10 @@ export function setupPendingRunsPoller(): NodeJS.Timeout {
         const runId = run.id as string;
         const status = run.status as string;
 
-        if (status === 'eljur_capture_session' || status === 'eljur_auto_login') {
+        if (status === 'eljur_scrape_diary') {
+          logger.info({ runId, status }, 'Found Eljur diary scrape request, starting');
+          await handleEljurDiaryScrape(runId);
+        } else if (status === 'eljur_capture_session' || status === 'eljur_auto_login') {
           logger.info({ runId, status }, 'Found Eljur session capture request, starting');
           await handleEljurSessionCapture(runId, status as 'eljur_capture_session' | 'eljur_auto_login');
         } else if (status === 'capture_session' || status === 'auto_login') {

@@ -48,6 +48,7 @@ import {
   useEljurForceSaveSession,
   useEljurAutoLogin,
   useEljurAutoLoginAvailable,
+  useTriggerEljurScrape,
 } from '../hooks/useCourses';
 import { useIsMobile } from '../hooks/useMediaQuery';
 
@@ -246,10 +247,13 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
   const eljurForceSaveSession = useEljurForceSaveSession();
   const eljurAutoLoginMutation = useEljurAutoLogin();
   const { data: eljurAutoLoginAvailable } = useEljurAutoLoginAvailable();
+  const triggerEljurScrape = useTriggerEljurScrape();
 
   const lastRun = runs?.[0] ?? null;
   const isRunning =
     lastRun?.status === 'pending' || lastRun?.status === 'running';
+  const isEljurScraping =
+    lastRun?.status === 'eljur_scrape_diary';
 
   // Determine isCapturing early so we can pass it to useSessionStatus
   const isCapturingFromRuns =
@@ -337,6 +341,19 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
     }
   };
 
+  const handleEljurTrigger = async () => {
+    if (eljurSessionStatus && eljurSessionStatus.status !== 'valid' && eljurSessionStatus.status !== 'unknown') {
+      messageApi.warning('Сначала войдите в Элжур');
+      return;
+    }
+    try {
+      await triggerEljurScrape.mutateAsync();
+      messageApi.success('Сбор заданий из Элжур запущен');
+    } catch {
+      messageApi.error('Не удалось запустить сбор из Элжур');
+    }
+  };
+
   const getStatusTag = (status: ScrapeRun['status']) => {
     switch (status) {
       case 'pending':
@@ -397,6 +414,12 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
         return (
           <Tag icon={<SaveOutlined />} color="warning">
             Сохранение сессии Элжур
+          </Tag>
+        );
+      case 'eljur_scrape_diary':
+        return (
+          <Tag icon={<LoadingOutlined spin />} color="processing">
+            Сбор из Элжур
           </Tag>
         );
       default:
@@ -614,18 +637,33 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
           size="large"
           style={{ width: '100%' }}
         >
-          <Tooltip title={sessionNeedsLogin ? 'Сначала войдите в Google Classroom' : undefined}>
-            <Button
-              type="primary"
-              icon={isRunning ? <LoadingOutlined spin /> : <PlayCircleOutlined />}
-              onClick={handleTrigger}
-              loading={triggerScrape.isPending}
-              disabled={isRunning || isCapturing}
-              size="large"
-            >
-              {isRunning ? 'Сбор выполняется...' : 'Запустить сбор'}
-            </Button>
-          </Tooltip>
+          <Space size="middle" wrap>
+            <Tooltip title={sessionNeedsLogin ? 'Сначала войдите в Google Classroom' : undefined}>
+              <Button
+                type="primary"
+                icon={isRunning ? <LoadingOutlined spin /> : <PlayCircleOutlined />}
+                onClick={handleTrigger}
+                loading={triggerScrape.isPending}
+                disabled={isRunning || isCapturing || isEljurScraping}
+                size="large"
+              >
+                {isRunning ? 'Сбор выполняется...' : 'Собрать из Classroom'}
+              </Button>
+            </Tooltip>
+
+            <Tooltip title={eljurSessionNeedsLogin ? 'Сначала войдите в Элжур' : undefined}>
+              <Button
+                type="primary"
+                icon={isEljurScraping ? <LoadingOutlined spin /> : <PlayCircleOutlined />}
+                onClick={handleEljurTrigger}
+                loading={triggerEljurScrape.isPending}
+                disabled={isRunning || isCapturing || isEljurCapturing || isEljurScraping}
+                size="large"
+              >
+                {isEljurScraping ? 'Сбор из Элжур...' : 'Собрать из Элжур'}
+              </Button>
+            </Tooltip>
+          </Space>
 
           {lastRun && (
             <Descriptions column={isMobile ? 1 : 3} size="small">

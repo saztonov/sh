@@ -170,6 +170,28 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
   // ─── Eljur endpoints ───
 
   /**
+   * POST /scraper/eljur/trigger - insert a new scrape_run with status 'eljur_scrape_diary'
+   */
+  fastify.post('/scraper/eljur/trigger', async (request, reply) => {
+    const { data, error } = await supabase
+      .from('scrape_runs')
+      .insert({
+        status: 'eljur_scrape_diary',
+        started_at: new Date().toISOString(),
+        source: 'eljur',
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      request.log.error(error, 'Failed to trigger Eljur diary scrape');
+      return reply.code(500).send({ error: 'Failed to trigger Eljur diary scrape' });
+    }
+
+    return reply.code(201).send({ data: data as ScrapeRun });
+  });
+
+  /**
    * POST /scraper/eljur/capture-session
    */
   fastify.post('/scraper/eljur/capture-session', async (request, reply) => {

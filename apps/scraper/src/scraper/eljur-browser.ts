@@ -10,7 +10,7 @@ const eljurStatePath = config.eljur.statePath;
 /**
  * Build the Eljur base URL from the vendor subdomain.
  */
-function eljurBaseUrl(): string {
+export function eljurBaseUrl(): string {
   return `https://${config.eljur.vendor}.eljur.ru`;
 }
 
@@ -468,6 +468,70 @@ export async function captureEljurSessionAuto(): Promise<{ success: boolean; err
       try { await closeBrowser(browser); } catch { /* */ }
     }
     return { success: false, error: errorMessage };
+  }
+}
+
+/**
+ * Detect the Eljur user ID by navigating to the journal and extracting it from the URL.
+ * The journal page URL contains the user ID in the format /journal-app/u.{userId}/...
+ */
+export async function detectEljurUserId(page: Page): Promise<string | null> {
+  try {
+    const baseUrl = eljurBaseUrl();
+
+    // First, look for a journal link on the current page
+    const journalHref = await page.evaluate(() => {
+      const links = document.querySelectorAll('a[href*="/journal-app/"]');
+      for (const link of links) {
+        const href = link.getAttribute('href');
+        if (href) return href;
+      }
+      return null;
+    });
+
+    if (journalHref) {
+      const match = journalHref.match(/\/journal-app\/u\.(\d+)/);
+      if (match) {
+        logger.info({ userId: match[1] }, 'Detected Eljur user ID from page link');
+        return match[1];
+      }
+    }
+
+    // Fallback: navigate to journal page and check URL after redirect
+    await page.goto(`${baseUrl}/journal-app`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30_000,
+    });
+    await page.waitForTimeout(3000);
+
+    const url = page.url();
+    const match = url.match(/\/journal-app\/u\.(\d+)/);
+    if (match) {
+      logger.info({ userId: match[1], url }, 'Detected Eljur user ID from redirect URL');
+      return match[1];
+    }
+
+    // Last resort: scan page links again after navigation
+    const linkMatch = await page.evaluate(() => {
+      const links = document.querySelectorAll('a[href*="/journal-app/u."]');
+      for (const link of links) {
+        const href = link.getAttribute('href');
+        const m = href?.match(/\/journal-app\/u\.(\d+)/);
+        if (m) return m[1];
+      }
+      return null;
+    });
+
+    if (linkMatch) {
+      logger.info({ userId: linkMatch }, 'Detected Eljur user ID from page links after navigation');
+      return linkMatch;
+    }
+
+    logger.warn({ url }, 'Could not detect Eljur user ID');
+    return null;
+  } catch (err) {
+    logger.error({ err }, 'Error detecting Eljur user ID');
+    return null;
   }
 }
 

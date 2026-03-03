@@ -20,7 +20,7 @@ export interface ScrapeRun {
   id: string;
   started_at: string;
   finished_at: string | null;
-  status: 'pending' | 'running' | 'success' | 'error' | 'capture_session' | 'force_save' | 'auto_login' | 'eljur_capture_session' | 'eljur_auto_login' | 'eljur_force_save';
+  status: 'pending' | 'running' | 'success' | 'error' | 'capture_session' | 'force_save' | 'auto_login' | 'eljur_capture_session' | 'eljur_auto_login' | 'eljur_force_save' | 'eljur_scrape_diary';
   assignments_found: number | null;
   assignments_new: number | null;
   error_message: string | null;

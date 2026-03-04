@@ -214,7 +214,7 @@ const CourseMappingTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
         columns={columns}
         dataSource={courses}
         rowKey="id"
-        pagination={{ pageSize: 10, hideOnSinglePage: true }}
+        pagination={{ pageSize: 20, showSizeChanger: true, pageSizeOptions: [10, 20, 50] }}
         size={isMobile ? 'small' : 'middle'}
         scroll={isMobile ? { x: 360 } : undefined}
         rowClassName={(record) => (record.is_active ? '' : 'inactive-row')}

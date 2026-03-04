@@ -26,6 +26,7 @@ import { fetchAssignmentDetail } from './assignment-detail.js';
 import { downloadAndUploadAttachment } from './attachments.js';
 import { resolveSubject } from '../parsers/course-name.js';
 import { parseDueDate } from '../parsers/due-date.js';
+import { ScrapeLogger } from '../scrape-logger.js';
 
 interface ScrapeResult {
   assignmentsFound: number;
@@ -135,9 +136,10 @@ async function upsertCourses(
 /**
  * Main scrape function. Orchestrates the entire scraping workflow.
  */
-export async function runScrape(runId?: string): Promise<void> {
+export async function runScrape(runId?: string, parentLog?: ScrapeLogger): Promise<void> {
   // Create or update scrape_run record
   let scrapeRunId = runId;
+  const isChild = !!parentLog;
 
   if (!scrapeRunId) {
     const { data: run, error: runError } = await supabase
@@ -159,6 +161,7 @@ export async function runScrape(runId?: string): Promise<void> {
   }
 
   logger.info({ scrapeRunId }, 'Starting scrape run');
+  const log = parentLog ?? new ScrapeLogger(scrapeRunId);
 
   let browser;
   try {
@@ -171,17 +174,22 @@ export async function runScrape(runId?: string): Promise<void> {
     const courseMappings = (mappings ?? []) as CourseMapping[];
 
     // Launch browser
+    log.info('browser_launch', 'Запуск браузера для Google Classroom');
     const launched = await launchBrowser();
     browser = launched.browser;
     const { context } = launched;
     const page = await context.newPage();
 
     // Step 1: Fetch and upsert courses
+    log.info('navigate', 'Переход на Google Classroom');
     const { courseNames, profileNumber } = await fetchCourses(page);
+    log.info('fetch_courses', 'Курсы получены', { count: courseNames.length });
     const courseIdMap = await upsertCourses(courseNames, courseMappings);
 
     // Step 2: Fetch assignment list
+    log.info('fetch_assignments', 'Получение списка заданий');
     const rawAssignments = await fetchAssignmentList(page, courseNames, profileNumber);
+    log.info('fetch_assignments', 'Список заданий получен', { count: rawAssignments.length });
 
     let assignmentsFound = rawAssignments.length;
     let assignmentsNew = 0;
@@ -246,10 +254,7 @@ export async function runScrape(runId?: string): Promise<void> {
         // Fetch detail page
         let detail = null;
         if (raw.classroomUrl) {
-          logger.info(
-            { title: raw.title, url: raw.classroomUrl },
-            'Navigating to assignment detail page',
-          );
+          log.info('fetch_detail', `Детали задания: ${raw.title}`, { url: raw.classroomUrl });
           try {
             detail = await fetchAssignmentDetail(page, raw.classroomUrl);
             logger.info(
@@ -342,6 +347,7 @@ export async function runScrape(runId?: string): Promise<void> {
 
         // Download and upload attachments
         if (detail?.attachments && detail.attachments.length > 0) {
+          log.info('download_attachment', `Скачивание вложений: ${detail.attachments.length}`, { title: raw.title });
           for (const attachment of detail.attachments) {
             try {
               const result = await downloadAndUploadAttachment(
@@ -392,16 +398,29 @@ export async function runScrape(runId?: string): Promise<void> {
     // Save browser state for next run
     await saveBrowserState(context);
 
-    // Update scrape_run with success
-    await supabase
-      .from('scrape_runs')
-      .update({
-        status: 'success',
-        finished_at: new Date().toISOString(),
-        assignments_found: assignmentsFound,
-        assignments_new: assignmentsNew,
-      })
-      .eq('id', scrapeRunId);
+    log.info('finish', 'Google Classroom сбор завершён', { assignmentsFound, assignmentsNew });
+
+    // Update scrape_run with success (skip if called from scrape_all)
+    if (!isChild) {
+      await supabase
+        .from('scrape_runs')
+        .update({
+          status: 'success',
+          finished_at: new Date().toISOString(),
+          assignments_found: assignmentsFound,
+          assignments_new: assignmentsNew,
+        })
+        .eq('id', scrapeRunId);
+    } else {
+      // In child mode, update counts only (scrape_all will set final status)
+      await supabase
+        .from('scrape_runs')
+        .update({
+          assignments_found: assignmentsFound,
+          assignments_new: assignmentsNew,
+        })
+        .eq('id', scrapeRunId);
+    }
 
     logger.info(
       { assignmentsFound, assignmentsNew, scrapeRunId },
@@ -409,23 +428,29 @@ export async function runScrape(runId?: string): Promise<void> {
     );
 
     await closeBrowser(browser);
+    if (!parentLog) await log.flush();
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     logger.error({ err, scrapeRunId }, 'Scrape run failed');
+    log.error('finish', `Google Classroom ошибка: ${errorMessage}`);
 
-    // Update scrape_run with error
-    await supabase
-      .from('scrape_runs')
-      .update({
-        status: 'error',
-        finished_at: new Date().toISOString(),
-        error_message: errorMessage,
-      })
-      .eq('id', scrapeRunId);
+    // Update scrape_run with error (skip if called from scrape_all)
+    if (!isChild) {
+      await supabase
+        .from('scrape_runs')
+        .update({
+          status: 'error',
+          finished_at: new Date().toISOString(),
+          error_message: errorMessage,
+        })
+        .eq('id', scrapeRunId);
+    }
 
     // Make sure browser is closed on error
     if (browser) {
       await closeBrowser(browser);
     }
+    if (!parentLog) await log.flush();
+    if (isChild) throw err;
   }
 }

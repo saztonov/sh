@@ -12,6 +12,7 @@ import { runScrape } from '../scraper/classroom.js';
 import { runEljurDiaryScrape } from '../scraper/eljur-diary.js';
 import { captureSession, captureSessionAuto, validateSession } from '../scraper/browser.js';
 import { captureEljurSession, captureEljurSessionAuto, validateEljurSession } from '../scraper/eljur-browser.js';
+import { ScrapeLogger } from '../scrape-logger.js';
 
 let isRunning = false;
 
@@ -45,6 +46,7 @@ async function handleEljurSessionCapture(
   }
 
   isRunning = true;
+  const log = new ScrapeLogger(runId);
   try {
     await supabase
       .from('scrape_runs')
@@ -52,8 +54,8 @@ async function handleEljurSessionCapture(
       .eq('id', runId);
 
     const result = mode === 'eljur_auto_login'
-      ? await captureEljurSessionAuto()
-      : await captureEljurSession();
+      ? await captureEljurSessionAuto(log)
+      : await captureEljurSession(log);
 
     if (result.success) {
       await supabase
@@ -111,6 +113,7 @@ async function handleSessionCapture(
   }
 
   isRunning = true;
+  const log = new ScrapeLogger(runId);
   try {
     // Mark as running
     await supabase
@@ -119,8 +122,8 @@ async function handleSessionCapture(
       .eq('id', runId);
 
     const result = mode === 'auto_login'
-      ? await captureSessionAuto()
-      : await captureSession();
+      ? await captureSessionAuto(log)
+      : await captureSession(log);
 
     if (result.success) {
       await supabase
@@ -143,6 +146,96 @@ async function handleSessionCapture(
         .eq('id', runId);
       logger.error({ runId, mode, error: result.error }, 'Session capture failed');
     }
+  } finally {
+    isRunning = false;
+  }
+}
+
+/**
+ * Handle a combined 'scrape_all' request: Google Classroom → Eljur sequentially.
+ */
+async function handleScrapeAll(runId: string): Promise<void> {
+  if (isRunning) {
+    logger.warn('Another operation in progress, skipping scrape_all');
+    return;
+  }
+
+  isRunning = true;
+  const log = new ScrapeLogger(runId);
+
+  try {
+    await supabase
+      .from('scrape_runs')
+      .update({ status: 'running', started_at: new Date().toISOString() })
+      .eq('id', runId);
+
+    let googleFound = 0;
+    let googleNew = 0;
+    let eljurFound = 0;
+    let eljurNew = 0;
+    const errors: string[] = [];
+
+    // Phase 1: Google Classroom
+    log.info(null, 'Начало сбора из всех источников');
+    try {
+      log.info(null, 'Запуск сбора из Google Classroom');
+      await runScrape(runId, log);
+      // Read counts from the scrape_run (runScrape updates them)
+      const { data: afterGoogle } = await supabase
+        .from('scrape_runs')
+        .select('assignments_found, assignments_new')
+        .eq('id', runId)
+        .single();
+      googleFound = afterGoogle?.assignments_found ?? 0;
+      googleNew = afterGoogle?.assignments_new ?? 0;
+      log.info('finish', 'Google Classroom завершён', { found: googleFound, new: googleNew });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error('finish', `Google Classroom ошибка: ${msg}`);
+      errors.push(`Google: ${msg}`);
+    }
+
+    // Phase 2: Eljur
+    try {
+      log.info(null, 'Запуск сбора из Eljur');
+      await runEljurDiaryScrape(runId, log);
+      // Read updated counts
+      const { data: afterEljur } = await supabase
+        .from('scrape_runs')
+        .select('assignments_found, assignments_new')
+        .eq('id', runId)
+        .single();
+      eljurFound = (afterEljur?.assignments_found ?? 0) - googleFound;
+      eljurNew = (afterEljur?.assignments_new ?? 0) - googleNew;
+      log.info('finish', 'Eljur завершён', { found: eljurFound, new: eljurNew });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log.error('finish', `Eljur ошибка: ${msg}`);
+      errors.push(`Eljur: ${msg}`);
+    }
+
+    // Final status
+    const totalFound = googleFound + eljurFound;
+    const totalNew = googleNew + eljurNew;
+    const finalStatus = errors.length === 0 ? 'success' : (totalFound > 0 ? 'success' : 'error');
+
+    await supabase
+      .from('scrape_runs')
+      .update({
+        status: finalStatus,
+        finished_at: new Date().toISOString(),
+        assignments_found: totalFound,
+        assignments_new: totalNew,
+        error_message: errors.length > 0 ? errors.join('; ') : null,
+      })
+      .eq('id', runId);
+
+    log.info('finish', 'Сбор из всех источников завершён', {
+      totalFound,
+      totalNew,
+      errors: errors.length,
+    });
+    await log.flush();
   } finally {
     isRunning = false;
   }
@@ -210,7 +303,7 @@ export function setupPendingRunsPoller(): NodeJS.Timeout {
       const { data: pendingRuns } = await supabase
         .from('scrape_runs')
         .select('id, status')
-        .in('status', ['pending', 'capture_session', 'auto_login', 'eljur_capture_session', 'eljur_auto_login', 'eljur_scrape_diary'])
+        .in('status', ['pending', 'capture_session', 'auto_login', 'eljur_capture_session', 'eljur_auto_login', 'eljur_scrape_diary', 'scrape_all'])
         .order('started_at', { ascending: true })
         .limit(1);
 
@@ -219,7 +312,10 @@ export function setupPendingRunsPoller(): NodeJS.Timeout {
         const runId = run.id as string;
         const status = run.status as string;
 
-        if (status === 'eljur_scrape_diary') {
+        if (status === 'scrape_all') {
+          logger.info({ runId, status }, 'Found combined scrape_all request, starting');
+          await handleScrapeAll(runId);
+        } else if (status === 'eljur_scrape_diary') {
           logger.info({ runId, status }, 'Found Eljur diary scrape request, starting');
           await handleEljurDiaryScrape(runId);
         } else if (status === 'eljur_capture_session' || status === 'eljur_auto_login') {

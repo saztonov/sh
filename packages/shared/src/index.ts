@@ -20,6 +20,9 @@ export type {
   Course,
   CourseMapping,
   ScrapeRun,
+  ScrapeLog,
+  ScrapeLogLevel,
+  ScrapeLogStep,
   TelegramUser,
 } from './types/course.js';
 

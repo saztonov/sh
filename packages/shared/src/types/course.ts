@@ -20,11 +20,39 @@ export interface ScrapeRun {
   id: string;
   started_at: string;
   finished_at: string | null;
-  status: 'pending' | 'running' | 'success' | 'error' | 'capture_session' | 'force_save' | 'auto_login' | 'eljur_capture_session' | 'eljur_auto_login' | 'eljur_force_save' | 'eljur_scrape_diary';
+  status: 'pending' | 'running' | 'success' | 'error' | 'capture_session' | 'force_save' | 'auto_login' | 'eljur_capture_session' | 'eljur_auto_login' | 'eljur_force_save' | 'eljur_scrape_diary' | 'scrape_all';
   assignments_found: number | null;
   assignments_new: number | null;
   error_message: string | null;
   source?: 'google' | 'eljur' | null;
+}
+
+export type ScrapeLogLevel = 'info' | 'warn' | 'error' | 'debug';
+
+export type ScrapeLogStep =
+  | 'browser_launch'
+  | 'session_load'
+  | 'session_check'
+  | 'auto_login'
+  | 'manual_login_wait'
+  | 'session_save'
+  | 'navigate'
+  | 'fetch_courses'
+  | 'fetch_assignments'
+  | 'fetch_detail'
+  | 'download_attachment'
+  | 'db_upsert'
+  | 'finish';
+
+export interface ScrapeLog {
+  id: string;
+  run_id: string;
+  created_at: string;
+  level: ScrapeLogLevel;
+  step: ScrapeLogStep | null;
+  message: string;
+  details: Record<string, unknown> | null;
+  duration_ms: number | null;
 }
 
 export interface TelegramUser {

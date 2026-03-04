@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Tabs,
   Table,
@@ -17,6 +17,8 @@ import {
   Badge,
   Tooltip,
   Divider,
+  Drawer,
+  Timeline,
 } from 'antd';
 import {
   CheckCircleOutlined,
@@ -28,16 +30,19 @@ import {
   QuestionCircleOutlined,
   SaveOutlined,
   RobotOutlined,
+  ThunderboltOutlined,
+  FileSearchOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { SUBJECTS } from '@homework/shared';
-import type { Course, ScrapeRun } from '@homework/shared';
+import type { Course, ScrapeRun, ScrapeLog } from '@homework/shared';
 import {
   useCourses,
   useUpdateCourse,
   useScrapeRuns,
   useTriggerScrape,
+  useTriggerAllScrape,
   useSessionStatus,
   useCaptureSession,
   useForceSaveSession,
@@ -49,6 +54,7 @@ import {
   useEljurAutoLogin,
   useEljurAutoLoginAvailable,
   useTriggerEljurScrape,
+  useScrapeRunLogs,
 } from '../hooks/useCourses';
 import { useIsMobile } from '../hooks/useMediaQuery';
 
@@ -248,12 +254,19 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
   const eljurAutoLoginMutation = useEljurAutoLogin();
   const { data: eljurAutoLoginAvailable } = useEljurAutoLoginAvailable();
   const triggerEljurScrape = useTriggerEljurScrape();
+  const triggerAllScrape = useTriggerAllScrape();
+
+  // Logs drawer state
+  const [logsRunId, setLogsRunId] = useState<string | null>(null);
+  const { data: logsData, isLoading: logsLoading } = useScrapeRunLogs(logsRunId);
 
   const lastRun = runs?.[0] ?? null;
   const isRunning =
     lastRun?.status === 'pending' || lastRun?.status === 'running';
   const isEljurScraping =
     lastRun?.status === 'eljur_scrape_diary';
+  const isScrapeAll =
+    lastRun?.status === 'scrape_all';
 
   // Determine isCapturing early so we can pass it to useSessionStatus
   const isCapturingFromRuns =
@@ -341,6 +354,26 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
     }
   };
 
+  const handleTriggerAll = async () => {
+    const warnings: string[] = [];
+    if (sessionStatus && sessionStatus.status !== 'valid' && sessionStatus.status !== 'unknown') {
+      warnings.push('Google Classroom');
+    }
+    if (eljurSessionStatus && eljurSessionStatus.status !== 'valid' && eljurSessionStatus.status !== 'unknown') {
+      warnings.push('Элжур');
+    }
+    if (warnings.length > 0) {
+      messageApi.warning(`Сначала войдите в: ${warnings.join(', ')}`);
+      return;
+    }
+    try {
+      await triggerAllScrape.mutateAsync();
+      messageApi.success('Сбор из всех источников запущен');
+    } catch {
+      messageApi.error('Не удалось запустить сбор');
+    }
+  };
+
   const handleEljurTrigger = async () => {
     if (eljurSessionStatus && eljurSessionStatus.status !== 'valid' && eljurSessionStatus.status !== 'unknown') {
       messageApi.warning('Сначала войдите в Элжур');
@@ -422,6 +455,12 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
             Сбор из Элжур
           </Tag>
         );
+      case 'scrape_all':
+        return (
+          <Tag icon={<ThunderboltOutlined />} color="processing">
+            Сбор из всех
+          </Tag>
+        );
       default:
         return <Tag>{status}</Tag>;
     }
@@ -479,6 +518,22 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
         ) : (
           '—'
         ),
+    },
+    {
+      title: 'Лог',
+      key: 'logs',
+      width: 60,
+      align: 'center',
+      render: (_: unknown, record: ScrapeRun) => (
+        <Tooltip title="Посмотреть логи">
+          <Button
+            type="text"
+            size="small"
+            icon={<FileSearchOutlined />}
+            onClick={() => setLogsRunId(record.id)}
+          />
+        </Tooltip>
+      ),
     },
   ];
 
@@ -638,29 +693,36 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
           style={{ width: '100%' }}
         >
           <Space size="middle" wrap>
+            <Button
+              type="primary"
+              icon={isScrapeAll || isRunning ? <LoadingOutlined spin /> : <ThunderboltOutlined />}
+              onClick={handleTriggerAll}
+              loading={triggerAllScrape.isPending}
+              disabled={isRunning || isCapturing || isEljurCapturing || isEljurScraping || isScrapeAll}
+              size="large"
+            >
+              {isScrapeAll || isRunning ? 'Сбор выполняется...' : 'Собрать всё'}
+            </Button>
+
             <Tooltip title={sessionNeedsLogin ? 'Сначала войдите в Google Classroom' : undefined}>
               <Button
-                type="primary"
                 icon={isRunning ? <LoadingOutlined spin /> : <PlayCircleOutlined />}
                 onClick={handleTrigger}
                 loading={triggerScrape.isPending}
-                disabled={isRunning || isCapturing || isEljurScraping}
-                size="large"
+                disabled={isRunning || isCapturing || isEljurScraping || isScrapeAll}
               >
-                {isRunning ? 'Сбор выполняется...' : 'Собрать из Classroom'}
+                Только Classroom
               </Button>
             </Tooltip>
 
             <Tooltip title={eljurSessionNeedsLogin ? 'Сначала войдите в Элжур' : undefined}>
               <Button
-                type="primary"
                 icon={isEljurScraping ? <LoadingOutlined spin /> : <PlayCircleOutlined />}
                 onClick={handleEljurTrigger}
                 loading={triggerEljurScrape.isPending}
-                disabled={isRunning || isCapturing || isEljurCapturing || isEljurScraping}
-                size="large"
+                disabled={isRunning || isCapturing || isEljurCapturing || isEljurScraping || isScrapeAll}
               >
-                {isEljurScraping ? 'Сбор из Элжур...' : 'Собрать из Элжур'}
+                Только Элжур
               </Button>
             </Tooltip>
           </Space>
@@ -736,6 +798,51 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
           )}
         </>
       )}
+
+      {/* Logs Drawer */}
+      <Drawer
+        title="Логи запуска"
+        open={!!logsRunId}
+        onClose={() => setLogsRunId(null)}
+        width={isMobile ? '100%' : 520}
+      >
+        {logsLoading ? (
+          <Spin tip="Загрузка логов..." />
+        ) : !logsData || logsData.length === 0 ? (
+          <Empty description="Логи не найдены" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        ) : (
+          <Timeline
+            items={logsData.map((log: ScrapeLog) => ({
+              color:
+                log.level === 'error'
+                  ? 'red'
+                  : log.level === 'warn'
+                    ? 'orange'
+                    : 'blue',
+              children: (
+                <div>
+                  <Text strong>{log.step ? `[${log.step}] ` : ''}</Text>
+                  <Text>{log.message}</Text>
+                  <br />
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {dayjs(log.created_at).format('HH:mm:ss')}
+                    {log.duration_ms != null && ` · ${log.duration_ms}мс`}
+                  </Text>
+                  {log.details && (
+                    <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
+                      {Object.entries(log.details).map(([k, v]) => (
+                        <span key={k} style={{ marginRight: 8 }}>
+                          {k}: {String(v)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ),
+            }))}
+          />
+        )}
+      </Drawer>
     </div>
   );
 };

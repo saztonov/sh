@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { supabase } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
-import type { ScrapeRun } from '@homework/shared';
+import type { ScrapeRun, ScrapeLog } from '@homework/shared';
 
 const scraperRoutes: FastifyPluginAsync = async (fastify) => {
   // Diagnostic log: check if auto-login env vars are available
@@ -317,6 +317,30 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
     });
   });
 
+  // ─── Combined endpoints ───
+
+  /**
+   * POST /scraper/trigger-all - insert a single scrape_run with status 'scrape_all'
+   * The scraper will execute Google Classroom → Eljur sequentially.
+   */
+  fastify.post('/scraper/trigger-all', async (request, reply) => {
+    const { data, error } = await supabase
+      .from('scrape_runs')
+      .insert({
+        status: 'scrape_all',
+        started_at: new Date().toISOString(),
+      })
+      .select('*')
+      .single();
+
+    if (error) {
+      request.log.error(error, 'Failed to trigger combined scrape');
+      return reply.code(500).send({ error: 'Failed to trigger combined scrape' });
+    }
+
+    return reply.code(201).send({ data: data as ScrapeRun });
+  });
+
   // ─── Common endpoints ───
 
   /**
@@ -357,6 +381,26 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return { data: (data ?? []) as ScrapeRun[] };
+  });
+
+  /**
+   * GET /scraper/logs/:runId - return all scrape_logs for a given run
+   */
+  fastify.get<{ Params: { runId: string } }>('/scraper/logs/:runId', async (request, reply) => {
+    const { runId } = request.params;
+
+    const { data, error } = await supabase
+      .from('scrape_logs')
+      .select('*')
+      .eq('run_id', runId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      request.log.error(error, 'Failed to fetch scrape logs');
+      return reply.code(500).send({ error: 'Failed to fetch scrape logs' });
+    }
+
+    return { data: (data ?? []) as ScrapeLog[] };
   });
 };
 

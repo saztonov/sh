@@ -18,6 +18,7 @@ import { eljurBaseUrl, detectEljurUserId } from './eljur-browser.js';
 import { downloadAndUploadAttachment } from './attachments.js';
 import { ELJUR_SELECTORS, ELJUR_SKIP_TEXTS } from './eljur-selectors.js';
 import { config } from '../config.js';
+import { ScrapeLogger } from '../scrape-logger.js';
 
 interface RawEljurHomework {
   subject: string;
@@ -243,9 +244,10 @@ async function ensureEljurCourse(
 /**
  * Main Eljur diary scrape function. Orchestrates the entire workflow.
  */
-export async function runEljurDiaryScrape(runId?: string): Promise<void> {
+export async function runEljurDiaryScrape(runId?: string, parentLog?: ScrapeLogger): Promise<void> {
   // Create or update scrape_run record
   let scrapeRunId = runId;
+  const isChild = !!parentLog;
 
   if (!scrapeRunId) {
     const { data: run, error: runError } = await supabase
@@ -263,7 +265,7 @@ export async function runEljurDiaryScrape(runId?: string): Promise<void> {
       return;
     }
     scrapeRunId = run.id as string;
-  } else {
+  } else if (!isChild) {
     await supabase
       .from('scrape_runs')
       .update({ status: 'running', started_at: new Date().toISOString() })
@@ -271,10 +273,12 @@ export async function runEljurDiaryScrape(runId?: string): Promise<void> {
   }
 
   logger.info({ scrapeRunId }, 'Starting Eljur diary scrape');
+  const log = parentLog ?? new ScrapeLogger(scrapeRunId);
 
   let browser;
   try {
     // Launch browser with Eljur session
+    log.info('browser_launch', 'Запуск браузера для Eljur');
     const launched = await launchBrowser(true, config.eljur.statePath);
     browser = launched.browser;
     const { context } = launched;
@@ -282,6 +286,7 @@ export async function runEljurDiaryScrape(runId?: string): Promise<void> {
 
     // Check if session is valid by navigating to Eljur
     const baseUrl = eljurBaseUrl();
+    log.info('session_check', 'Проверка сессии Eljur');
     await page.goto(baseUrl, {
       waitUntil: 'domcontentloaded',
       timeout: 60_000,
@@ -292,6 +297,7 @@ export async function runEljurDiaryScrape(runId?: string): Promise<void> {
     if (currentUrl.includes('/authorize')) {
       throw new Error('Сессия Элжур истекла. Обновите вход через кнопку "Войти в Элжур" в Настройках.');
     }
+    log.info('session_check', 'Сессия Eljur валидна');
 
     // Detect user ID
     const userId = await detectEljurUserId(page);
@@ -300,9 +306,11 @@ export async function runEljurDiaryScrape(runId?: string): Promise<void> {
     }
 
     // Parse both weeks
+    log.info('fetch_assignments', 'Парсинг дневника Eljur');
     const currentWeekHomework = await parseEljurDiaryWeek(page, userId, 0);
     const nextWeekHomework = await parseEljurDiaryWeek(page, userId, -1);
     const allHomework = [...currentWeekHomework, ...nextWeekHomework];
+    log.info('fetch_assignments', 'Задания из дневника получены', { count: allHomework.length });
 
     const assignmentsFound = allHomework.length;
     let assignmentsNew = 0;
@@ -423,16 +431,34 @@ export async function runEljurDiaryScrape(runId?: string): Promise<void> {
     // Save browser state
     await saveBrowserState(context, config.eljur.statePath);
 
-    // Update scrape_run with success
-    await supabase
-      .from('scrape_runs')
-      .update({
-        status: 'success',
-        finished_at: new Date().toISOString(),
-        assignments_found: assignmentsFound,
-        assignments_new: assignmentsNew,
-      })
-      .eq('id', scrapeRunId);
+    log.info('finish', 'Eljur сбор завершён', { assignmentsFound, assignmentsNew });
+
+    // Update scrape_run (skip status update if called from scrape_all)
+    if (!isChild) {
+      await supabase
+        .from('scrape_runs')
+        .update({
+          status: 'success',
+          finished_at: new Date().toISOString(),
+          assignments_found: assignmentsFound,
+          assignments_new: assignmentsNew,
+        })
+        .eq('id', scrapeRunId);
+    } else {
+      // In child mode, accumulate counts
+      const { data: current } = await supabase
+        .from('scrape_runs')
+        .select('assignments_found, assignments_new')
+        .eq('id', scrapeRunId)
+        .single();
+      await supabase
+        .from('scrape_runs')
+        .update({
+          assignments_found: (current?.assignments_found ?? 0) + assignmentsFound,
+          assignments_new: (current?.assignments_new ?? 0) + assignmentsNew,
+        })
+        .eq('id', scrapeRunId);
+    }
 
     logger.info(
       { assignmentsFound, assignmentsNew, scrapeRunId },
@@ -440,21 +466,27 @@ export async function runEljurDiaryScrape(runId?: string): Promise<void> {
     );
 
     await closeBrowser(browser);
+    if (!parentLog) await log.flush();
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     logger.error({ err, scrapeRunId }, 'Eljur diary scrape failed');
+    log.error('finish', `Eljur ошибка: ${errorMessage}`);
 
-    await supabase
-      .from('scrape_runs')
-      .update({
-        status: 'error',
-        finished_at: new Date().toISOString(),
-        error_message: errorMessage,
-      })
-      .eq('id', scrapeRunId);
+    if (!isChild) {
+      await supabase
+        .from('scrape_runs')
+        .update({
+          status: 'error',
+          finished_at: new Date().toISOString(),
+          error_message: errorMessage,
+        })
+        .eq('id', scrapeRunId);
+    }
 
     if (browser) {
       await closeBrowser(browser);
     }
+    if (!parentLog) await log.flush();
+    if (isChild) throw err;
   }
 }

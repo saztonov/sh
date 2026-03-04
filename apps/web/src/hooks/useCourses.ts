@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import type { Course, ScrapeRun } from '@homework/shared';
+import type { Course, ScrapeRun, ScrapeLog } from '@homework/shared';
 import api from '../lib/api';
 
 interface CoursesResponse {
@@ -176,6 +176,43 @@ export function useAutoLoginAvailable() {
       return data.data.available;
     },
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Trigger a combined scrape (Google Classroom + Eljur).
+ */
+export function useTriggerAllScrape() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post<ScrapeRunResponse>('/api/scraper/trigger-all');
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scrape-runs'] });
+    },
+  });
+}
+
+interface ScrapeLogsResponse {
+  data: ScrapeLog[];
+}
+
+/**
+ * Fetch logs for a specific scrape run.
+ */
+export function useScrapeRunLogs(runId: string | null) {
+  return useQuery<ScrapeLog[]>({
+    queryKey: ['scrape-logs', runId],
+    queryFn: async () => {
+      if (!runId) return [];
+      const { data } = await api.get<ScrapeLogsResponse>(`/api/scraper/logs/${runId}`);
+      return data.data;
+    },
+    enabled: !!runId,
+    staleTime: 10 * 1000,
   });
 }
 

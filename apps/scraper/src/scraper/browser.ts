@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { supabase } from '../db.js';
+import { ScrapeLogger } from '../scrape-logger.js';
 
 /**
  * Build launch options based on config.
@@ -10,6 +11,11 @@ import { supabase } from '../db.js';
  */
 function getLaunchOptions(headless: boolean) {
   const channel = config.playwright.channel;
+
+  // Empty channel → use Playwright's bundled Chromium (optimal for VPS)
+  if (!channel) {
+    return { headless };
+  }
 
   // Known channel names that Playwright supports directly
   const knownChannels = ['chrome', 'chrome-beta', 'chrome-dev', 'chrome-canary', 'msedge', 'msedge-beta', 'msedge-dev'];
@@ -163,10 +169,11 @@ async function checkForForceSave(): Promise<string | null> {
  * Opens visible browser, navigates to Classroom, waits for user to log in (up to 10 min),
  * saves session, and closes the browser. Does NOT scrape any data.
  */
-export async function captureSession(): Promise<{ success: boolean; error?: string }> {
+export async function captureSession(log?: ScrapeLogger): Promise<{ success: boolean; error?: string }> {
   let browser: Browser | undefined;
 
   try {
+    log?.info('browser_launch', 'Запуск браузера для захвата сессии Google');
     // Always launch visible (headless=false) for session capture
     const launched = await launchBrowser(false);
     browser = launched.browser;
@@ -223,12 +230,16 @@ export async function captureSession(): Promise<{ success: boolean; error?: stri
     // Check if already logged in
     if (await isLoggedInToClassroom(page)) {
       logger.info('Already logged in to Google Classroom');
+      log?.info('session_check', 'Уже авторизован в Google Classroom');
       await saveBrowserState(context);
       await closeBrowser(browser);
+      log?.info('session_save', 'Сессия сохранена');
+      await log?.flush();
       return { success: true };
     }
 
     // Not logged in — wait for user to complete login (up to 10 minutes)
+    log?.info('manual_login_wait', 'Ожидание ручного входа в Google (10 мин)');
     logger.info('Not logged in — waiting for manual login (10 min timeout)...');
 
     const deadline = Date.now() + 600_000; // 10 minutes
@@ -392,7 +403,7 @@ async function autoLogin(page: Page, email: string, password: string): Promise<b
  * Launches browser, navigates to Classroom, attempts auto-login with env credentials.
  * Does NOT fall back to manual login — that's a separate button.
  */
-export async function captureSessionAuto(): Promise<{ success: boolean; error?: string }> {
+export async function captureSessionAuto(log?: ScrapeLogger): Promise<{ success: boolean; error?: string }> {
   const email = config.google?.email;
   const password = config.google?.password;
 
@@ -408,6 +419,7 @@ export async function captureSessionAuto(): Promise<{ success: boolean; error?: 
     const { context } = launched;
     const page = await context.newPage();
 
+    log?.info('browser_launch', 'Запуск браузера для автологина Google');
     logger.info('Navigating to Google Classroom for auto-login...');
     await page.goto('https://classroom.google.com', {
       waitUntil: 'domcontentloaded',
@@ -420,16 +432,21 @@ export async function captureSessionAuto(): Promise<{ success: boolean; error?: 
     // Check if already logged in
     if (await isLoggedInToClassroom(page)) {
       logger.info('Already logged in to Google Classroom');
+      log?.info('session_check', 'Уже авторизован в Google Classroom');
       await saveBrowserState(context);
       await closeBrowser(browser);
+      await log?.flush();
       return { success: true };
     }
 
     // Attempt auto-login
+    log?.info('auto_login', 'Попытка автоматического входа в Google');
     const loginSuccess = await autoLogin(page, email, password);
 
     if (!loginSuccess) {
+      log?.error('auto_login', 'Автологин Google не удался');
       await closeBrowser(browser);
+      await log?.flush();
       return { success: false, error: 'Автоматический вход не удался. Возможные причины: CAPTCHA, 2FA, неверные данные.' };
     }
 
@@ -438,8 +455,10 @@ export async function captureSessionAuto(): Promise<{ success: boolean; error?: 
 
     if (await isLoggedInToClassroom(page)) {
       await saveBrowserState(context);
+      log?.info('session_save', 'Автологин Google успешен, сессия сохранена');
       logger.info('Auto-login successful, session saved');
       await closeBrowser(browser);
+      await log?.flush();
       return { success: true };
     }
 

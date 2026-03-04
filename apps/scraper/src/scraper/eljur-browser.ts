@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { supabase } from '../db.js';
 import { launchBrowser, saveBrowserState, closeBrowser } from './browser.js';
+import { ScrapeLogger } from '../scrape-logger.js';
 
 const eljurStatePath = config.eljur.statePath;
 
@@ -260,7 +261,7 @@ async function eljurAutoLogin(page: Page, vendor: string, login: string, passwor
  * Capture an Eljur session interactively.
  * Opens visible browser, navigates to Eljur, waits for user to log in (up to 10 min).
  */
-export async function captureEljurSession(): Promise<{ success: boolean; error?: string }> {
+export async function captureEljurSession(log?: ScrapeLogger): Promise<{ success: boolean; error?: string }> {
   const vendor = config.eljur.vendor;
   if (!vendor) {
     return { success: false, error: 'ELJUR_VENDOR не настроен' };
@@ -269,6 +270,7 @@ export async function captureEljurSession(): Promise<{ success: boolean; error?:
   let browser: Browser | undefined;
 
   try {
+    log?.info('browser_launch', 'Запуск браузера для захвата сессии Eljur');
     const launched = await launchBrowser(false, eljurStatePath);
     browser = launched.browser;
     const { context } = launched;
@@ -297,6 +299,7 @@ export async function captureEljurSession(): Promise<{ success: boolean; error?:
       }
     });
 
+    log?.info('navigate', 'Переход на страницу авторизации Eljur');
     logger.info('Navigating to Eljur for session capture...');
     await page.goto(`${eljurBaseUrl()}/authorize`, {
       waitUntil: 'domcontentloaded',
@@ -307,12 +310,16 @@ export async function captureEljurSession(): Promise<{ success: boolean; error?:
     // Check if already logged in
     if (await isLoggedInToEljur(page)) {
       logger.info('Already logged in to Eljur');
+      log?.info('session_check', 'Уже авторизован в Eljur');
       await saveBrowserState(context, eljurStatePath);
+      log?.info('session_save', 'Сессия Eljur сохранена');
       await closeBrowser(browser);
+      await log?.flush();
       return { success: true };
     }
 
     // Wait for manual login (up to 10 minutes)
+    log?.info('manual_login_wait', 'Ожидание ручного входа в Eljur (10 мин)');
     logger.info('Not logged in to Eljur — waiting for manual login (10 min timeout)...');
 
     const deadline = Date.now() + 600_000;
@@ -397,7 +404,7 @@ export async function captureEljurSession(): Promise<{ success: boolean; error?:
 /**
  * Capture Eljur session using automatic login with env credentials.
  */
-export async function captureEljurSessionAuto(): Promise<{ success: boolean; error?: string }> {
+export async function captureEljurSessionAuto(log?: ScrapeLogger): Promise<{ success: boolean; error?: string }> {
   const { vendor, login, password } = config.eljur;
 
   if (!vendor || !login || !password) {
@@ -412,6 +419,7 @@ export async function captureEljurSessionAuto(): Promise<{ success: boolean; err
     const { context } = launched;
     const page = await context.newPage();
 
+    log?.info('browser_launch', 'Запуск браузера для автологина Eljur');
     logger.info('Navigating to Eljur for auto-login...');
     await page.goto(`${eljurBaseUrl()}/authorize`, {
       waitUntil: 'domcontentloaded',
@@ -422,16 +430,21 @@ export async function captureEljurSessionAuto(): Promise<{ success: boolean; err
     // Check if already logged in
     if (await isLoggedInToEljur(page)) {
       logger.info('Already logged in to Eljur');
+      log?.info('session_check', 'Уже авторизован в Eljur');
       await saveBrowserState(context, eljurStatePath);
       await closeBrowser(browser);
+      await log?.flush();
       return { success: true };
     }
 
     // Attempt auto-login
+    log?.info('auto_login', 'Попытка автоматического входа в Eljur');
     const loginSuccess = await eljurAutoLogin(page, vendor, login, password);
 
     if (!loginSuccess) {
+      log?.error('auto_login', 'Автологин Eljur не удался');
       await closeBrowser(browser);
+      await log?.flush();
       return { success: false, error: 'Автоматический вход в Элжур не удался. Возможные причины: CAPTCHA, неверные данные.' };
     }
 
@@ -445,8 +458,10 @@ export async function captureEljurSessionAuto(): Promise<{ success: boolean; err
 
     if (await isLoggedInToEljur(page)) {
       await saveBrowserState(context, eljurStatePath);
+      log?.info('session_save', 'Автологин Eljur успешен, сессия сохранена');
       logger.info('Eljur auto-login successful, session saved');
       await closeBrowser(browser);
+      await log?.flush();
       return { success: true };
     }
 
@@ -454,8 +469,10 @@ export async function captureEljurSessionAuto(): Promise<{ success: boolean; err
     const finalUrl = page.url();
     if (!finalUrl.includes('/authorize') && finalUrl.includes(`${vendor}.eljur.ru`)) {
       logger.info({ url: finalUrl }, 'Eljur URL looks authenticated, saving session despite DOM check failure');
+      log?.info('session_save', 'Eljur URL выглядит авторизованным, сессия сохранена');
       await saveBrowserState(context, eljurStatePath);
       await closeBrowser(browser);
+      await log?.flush();
       return { success: true };
     }
 

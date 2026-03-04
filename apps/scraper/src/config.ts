@@ -37,7 +37,7 @@ export const config = {
   playwright: {
     statePath: optionalEnv('PLAYWRIGHT_STATE_PATH', './playwright-state.json'),
     headless: optionalEnv('PLAYWRIGHT_HEADLESS', 'true') === 'true',
-    channel: optionalEnv('BROWSER_CHANNEL', 'chrome'),
+    channel: optionalEnv('BROWSER_CHANNEL', ''),
   },
   google: {
     email: process.env.GOOGLE_EMAIL ?? '',

@@ -355,17 +355,6 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
   };
 
   const handleTriggerAll = async () => {
-    const warnings: string[] = [];
-    if (sessionStatus && sessionStatus.status !== 'valid' && sessionStatus.status !== 'unknown') {
-      warnings.push('Google Classroom');
-    }
-    if (eljurSessionStatus && eljurSessionStatus.status !== 'valid' && eljurSessionStatus.status !== 'unknown') {
-      warnings.push('Элжур');
-    }
-    if (warnings.length > 0) {
-      messageApi.warning(`Сначала войдите в: ${warnings.join(', ')}`);
-      return;
-    }
     try {
       await triggerAllScrape.mutateAsync();
       messageApi.success('Сбор из всех источников запущен');

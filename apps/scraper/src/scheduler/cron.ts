@@ -16,6 +16,15 @@ import { ScrapeLogger } from '../scrape-logger.js';
 
 let isRunning = false;
 
+function isGoogleSessionError(msg: string): boolean {
+  const lower = msg.toLowerCase();
+  return lower.includes('no valid google classroom session') || lower.includes('accounts.google.com');
+}
+
+function isEljurSessionError(msg: string): boolean {
+  return msg.includes('Сессия Элжур') || msg.includes('/authorize');
+}
+
 /**
  * Guard to prevent concurrent scrape runs.
  */
@@ -191,8 +200,34 @@ async function handleScrapeAll(runId: string): Promise<void> {
       log.info('finish', 'Google Classroom завершён', { found: googleFound, new: googleNew });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.error('finish', `Google Classroom ошибка: ${msg}`);
-      errors.push(`Google: ${msg}`);
+      if (isGoogleSessionError(msg)) {
+        log.info('auto_login', 'Сессия Google Classroom истекла, автологин...');
+        const loginResult = await captureSessionAuto(log);
+        if (loginResult.success) {
+          log.info('auto_login', 'Автологин Google Classroom успешен, повторный сбор');
+          try {
+            await runScrape(runId, log);
+            const { data: afterGoogle } = await supabase
+              .from('scrape_runs')
+              .select('assignments_found, assignments_new')
+              .eq('id', runId)
+              .single();
+            googleFound = afterGoogle?.assignments_found ?? 0;
+            googleNew = afterGoogle?.assignments_new ?? 0;
+            log.info('finish', 'Google Classroom завершён', { found: googleFound, new: googleNew });
+          } catch (retryErr) {
+            const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+            log.error('finish', `Google Classroom ошибка после автологина: ${retryMsg}`);
+            errors.push(`Google: ${retryMsg}`);
+          }
+        } else {
+          log.error('auto_login', `Автологин Google Classroom не удался: ${loginResult.error}`);
+          errors.push(`Google: автологин не удался — ${loginResult.error}`);
+        }
+      } else {
+        log.error('finish', `Google Classroom ошибка: ${msg}`);
+        errors.push(`Google: ${msg}`);
+      }
     }
 
     // Phase 2: Eljur
@@ -210,8 +245,34 @@ async function handleScrapeAll(runId: string): Promise<void> {
       log.info('finish', 'Eljur завершён', { found: eljurFound, new: eljurNew });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log.error('finish', `Eljur ошибка: ${msg}`);
-      errors.push(`Eljur: ${msg}`);
+      if (isEljurSessionError(msg)) {
+        log.info('auto_login', 'Сессия Eljur истекла, автологин...');
+        const loginResult = await captureEljurSessionAuto(log);
+        if (loginResult.success) {
+          log.info('auto_login', 'Автологин Eljur успешен, повторный сбор');
+          try {
+            await runEljurDiaryScrape(runId, log);
+            const { data: afterEljur } = await supabase
+              .from('scrape_runs')
+              .select('assignments_found, assignments_new')
+              .eq('id', runId)
+              .single();
+            eljurFound = (afterEljur?.assignments_found ?? 0) - googleFound;
+            eljurNew = (afterEljur?.assignments_new ?? 0) - googleNew;
+            log.info('finish', 'Eljur завершён', { found: eljurFound, new: eljurNew });
+          } catch (retryErr) {
+            const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+            log.error('finish', `Eljur ошибка после автологина: ${retryMsg}`);
+            errors.push(`Eljur: ${retryMsg}`);
+          }
+        } else {
+          log.error('auto_login', `Автологин Eljur не удался: ${loginResult.error}`);
+          errors.push(`Eljur: автологин не удался — ${loginResult.error}`);
+        }
+      } else {
+        log.error('finish', `Eljur ошибка: ${msg}`);
+        errors.push(`Eljur: ${msg}`);
+      }
     }
 
     // Final status

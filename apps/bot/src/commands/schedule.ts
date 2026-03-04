@@ -30,26 +30,11 @@ export async function scheduleCommand(ctx: CommandContext<Context>): Promise<voi
 
   logger.info({ dayOfWeek: dayNum, date: today }, '/schedule command');
 
-  // Fetch active subjects to filter schedule slots
-  const { data: activeCourses } = await supabase
-    .from('courses')
-    .select('subject')
-    .eq('is_active', true)
-    .not('subject', 'is', null);
-
-  const activeSubjects = [...new Set((activeCourses ?? []).map((r) => r.subject as string))];
-
-  if (activeSubjects.length === 0) {
-    await ctx.reply(`На ${dayName} расписание не найдено.`);
-    return;
-  }
-
-  // Fetch schedule slots for today (only active subjects)
+  // Fetch schedule slots for today
   const { data: slots, error: slotsError } = await supabase
     .from('schedule_slots')
     .select('*')
     .eq('day_of_week', dayNum)
-    .in('subject', activeSubjects)
     .order('lesson_number', { ascending: true });
 
   if (slotsError) {

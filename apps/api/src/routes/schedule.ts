@@ -20,19 +20,6 @@ const weekOffsetSchema = z.object({
   week_offset: z.coerce.number().int().default(0),
 });
 
-/** Fetch distinct subjects that have at least one active course */
-async function getActiveSubjects(): Promise<string[]> {
-  const { data } = await supabase
-    .from('courses')
-    .select('subject')
-    .eq('is_active', true)
-    .not('subject', 'is', null);
-
-  if (!data) return [];
-  const unique = [...new Set(data.map((r) => r.subject as string))];
-  return unique;
-}
-
 const scheduleRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', authMiddleware);
 
@@ -40,16 +27,9 @@ const scheduleRoutes: FastifyPluginAsync = async (fastify) => {
    * GET /schedule - all schedule slots ordered by day_of_week, lesson_number
    */
   fastify.get('/schedule', async (request, reply) => {
-    const activeSubjects = await getActiveSubjects();
-
-    if (activeSubjects.length === 0) {
-      return { data: [] as ScheduleSlot[] };
-    }
-
     const { data, error } = await supabase
       .from('schedule_slots')
       .select('*')
-      .in('subject', activeSubjects)
       .order('day_of_week', { ascending: true })
       .order('lesson_number', { ascending: true });
 
@@ -83,23 +63,12 @@ const scheduleRoutes: FastifyPluginAsync = async (fastify) => {
     const mondayStr = targetMonday.format('YYYY-MM-DD');
     const sundayStr = targetMonday.isoWeekday(7).format('YYYY-MM-DD');
 
-    // Fetch active subjects to filter schedule slots
-    const activeSubjects = await getActiveSubjects();
-
-    // Fetch schedule slots (only for active subjects)
-    const slotsQuery = supabase
+    // Fetch schedule slots (all subjects, including inactive)
+    const { data: slots, error: slotsError } = await supabase
       .from('schedule_slots')
       .select('*')
       .order('day_of_week', { ascending: true })
       .order('lesson_number', { ascending: true });
-
-    if (activeSubjects.length > 0) {
-      slotsQuery.in('subject', activeSubjects);
-    }
-
-    const { data: slots, error: slotsError } = activeSubjects.length > 0
-      ? await slotsQuery
-      : { data: [] as ScheduleSlot[], error: null };
 
     if (slotsError) {
       request.log.error(slotsError, 'Failed to fetch schedule slots');

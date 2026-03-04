@@ -24,14 +24,13 @@ import type { Dayjs } from 'dayjs';
 import { useActiveSubjects } from '../hooks/useCourses';
 import type { AssignmentWithCourse } from '@homework/shared';
 import { useAssignments } from '../hooks/useAssignments';
-import { useScheduleSlots } from '../hooks/useSchedule';
+
 import { useIsMobile } from '../hooks/useMediaQuery';
 import {
   getDueDateColor,
   getDueDateLabel,
   getSubjectColor,
   getSourceLabel,
-  getSlotTimeForSubject,
 } from '../lib/format';
 import AssignmentDrawer from '../components/assignments/AssignmentDrawer';
 
@@ -68,7 +67,7 @@ const AssignmentsPage: React.FC = () => {
   }, [subject, completedFilter, dateRange]);
 
   const { data: response, isLoading, error } = useAssignments(filters);
-  const { data: scheduleSlots } = useScheduleSlots();
+
   const { data: activeSubjects } = useActiveSubjects();
 
   const assignments = response?.data ?? [];
@@ -117,10 +116,6 @@ const AssignmentsPage: React.FC = () => {
   const renderAssignmentItem = (assignment: AssignmentWithCourse) => {
     const subjectName = assignment.course?.subject || assignment.course?.classroom_name || '';
     const isEljur = assignment.source === 'eljur';
-    const dayOfWeek = assignment.due_date ? dayjs(assignment.due_date).isoWeekday() : null;
-    const slotTime = !isEljur && scheduleSlots
-      ? getSlotTimeForSubject(scheduleSlots, subjectName, dayOfWeek)
-      : null;
     const sourceLabel = getSourceLabel(assignment.source);
 
     return (
@@ -163,7 +158,7 @@ const AssignmentsPage: React.FC = () => {
                   color={getSubjectColor(subjectName)}
                   style={{ borderRadius: 4, margin: 0, fontWeight: 500 }}
                 >
-                  {slotTime ? `${slotTime} ${subjectName}` : subjectName || 'Без предмета'}
+                  {subjectName || 'Без предмета'}
                 </Tag>
 
                 {assignment.due_date && (

@@ -42,6 +42,25 @@ const courseRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   /**
+   * GET /courses/active-subjects - distinct subjects with at least one active course
+   */
+  fastify.get('/courses/active-subjects', async (request, reply) => {
+    const { data, error } = await supabase
+      .from('courses')
+      .select('subject')
+      .eq('is_active', true)
+      .not('subject', 'is', null);
+
+    if (error) {
+      request.log.error(error, 'Failed to fetch active subjects');
+      return reply.code(500).send({ error: 'Failed to fetch active subjects' });
+    }
+
+    const subjects = [...new Set((data ?? []).map((r) => r.subject as string))].sort();
+    return { data: subjects };
+  });
+
+  /**
    * PATCH /courses/:id - update subject and/or is_active
    */
   fastify.patch<{ Params: { id: string } }>('/courses/:id', async (request, reply) => {

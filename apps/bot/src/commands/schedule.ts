@@ -30,11 +30,26 @@ export async function scheduleCommand(ctx: CommandContext<Context>): Promise<voi
 
   logger.info({ dayOfWeek: dayNum, date: today }, '/schedule command');
 
-  // Fetch schedule slots for today
+  // Fetch active subjects to filter schedule slots
+  const { data: activeCourses } = await supabase
+    .from('courses')
+    .select('subject')
+    .eq('is_active', true)
+    .not('subject', 'is', null);
+
+  const activeSubjects = [...new Set((activeCourses ?? []).map((r) => r.subject as string))];
+
+  if (activeSubjects.length === 0) {
+    await ctx.reply(`На ${dayName} расписание не найдено.`);
+    return;
+  }
+
+  // Fetch schedule slots for today (only active subjects)
   const { data: slots, error: slotsError } = await supabase
     .from('schedule_slots')
     .select('*')
     .eq('day_of_week', dayNum)
+    .in('subject', activeSubjects)
     .order('lesson_number', { ascending: true });
 
   if (slotsError) {
@@ -48,7 +63,7 @@ export async function scheduleCommand(ctx: CommandContext<Context>): Promise<voi
     return;
   }
 
-  // Fetch assignments due today to match with schedule slots
+  // Fetch assignments due today to match with schedule slots (only active courses)
   const { data: assignments } = await supabase
     .from('assignments')
     .select(`
@@ -57,8 +72,9 @@ export async function scheduleCommand(ctx: CommandContext<Context>): Promise<voi
       due_date,
       status,
       is_completed,
-      course:courses(classroom_name, subject)
+      course:courses!inner(classroom_name, subject)
     `)
+    .eq('course.is_active', true)
     .eq('due_date', today);
 
   const message = formatSchedule(slots, assignments ?? [], dayName, today);

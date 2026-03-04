@@ -34,8 +34,9 @@ export async function weekCommand(ctx: CommandContext<Context>): Promise<void> {
       due_raw,
       status,
       is_completed,
-      course:courses(classroom_name, subject)
+      course:courses!inner(classroom_name, subject)
     `)
+    .eq('course.is_active', true)
     .gte('due_date', mondayStr)
     .lte('due_date', sundayStr)
     .order('due_date', { ascending: true })

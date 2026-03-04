@@ -40,14 +40,10 @@ const assignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { status, from, to, subject, completed, limit, offset } = parsed.data;
 
-    // Use !inner join when filtering by subject so count is accurate
-    const joinClause = subject
-      ? '*, course:courses!inner(classroom_name, subject)'
-      : '*, course:courses(classroom_name, subject)';
-
     let query = supabase
       .from('assignments')
-      .select(joinClause, { count: 'exact' })
+      .select('*, course:courses!inner(classroom_name, subject)', { count: 'exact' })
+      .eq('course.is_active', true)
       .order('due_date', { ascending: true, nullsFirst: false })
       .range(offset, offset + limit - 1);
 
@@ -85,7 +81,8 @@ const assignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { data, error } = await supabase
       .from('assignments')
-      .select('*, course:courses(classroom_name, subject)')
+      .select('*, course:courses!inner(classroom_name, subject)')
+      .eq('course.is_active', true)
       .eq('due_date', today)
       .order('is_completed', { ascending: true });
 
@@ -105,7 +102,8 @@ const assignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { data, error } = await supabase
       .from('assignments')
-      .select('*, course:courses(classroom_name, subject)')
+      .select('*, course:courses!inner(classroom_name, subject)')
+      .eq('course.is_active', true)
       .eq('due_date', tomorrow)
       .order('is_completed', { ascending: true });
 
@@ -126,7 +124,8 @@ const assignmentRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { data, error } = await supabase
       .from('assignments')
-      .select('*, course:courses(classroom_name, subject)')
+      .select('*, course:courses!inner(classroom_name, subject)')
+      .eq('course.is_active', true)
       .gte('due_date', monday)
       .lte('due_date', sunday)
       .order('due_date', { ascending: true })

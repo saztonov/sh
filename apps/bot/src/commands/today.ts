@@ -24,8 +24,9 @@ export async function todayCommand(ctx: CommandContext<Context>): Promise<void> 
       due_raw,
       status,
       is_completed,
-      course:courses(classroom_name, subject)
+      course:courses!inner(classroom_name, subject)
     `)
+    .eq('course.is_active', true)
     .eq('due_date', today)
     .order('created_at', { ascending: true });
 

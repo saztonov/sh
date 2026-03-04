@@ -21,7 +21,7 @@ import {
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
-import { SUBJECTS } from '@homework/shared';
+import { useActiveSubjects } from '../hooks/useCourses';
 import type { AssignmentWithCourse } from '@homework/shared';
 import { useAssignments } from '../hooks/useAssignments';
 import { useScheduleSlots } from '../hooks/useSchedule';
@@ -69,6 +69,7 @@ const AssignmentsPage: React.FC = () => {
 
   const { data: response, isLoading, error } = useAssignments(filters);
   const { data: scheduleSlots } = useScheduleSlots();
+  const { data: activeSubjects } = useActiveSubjects();
 
   const assignments = response?.data ?? [];
   const total = response?.total ?? 0;
@@ -108,7 +109,7 @@ const AssignmentsPage: React.FC = () => {
 
   const hasActiveFilters = subject || completedFilter !== 'all' || dateRange;
 
-  const subjectOptions = SUBJECTS.map((s) => ({
+  const subjectOptions = (activeSubjects ?? []).map((s) => ({
     label: s,
     value: s,
   }));

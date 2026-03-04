@@ -22,6 +22,24 @@ interface SessionStatusResponse {
   };
 }
 
+interface ActiveSubjectsResponse {
+  data: string[];
+}
+
+/**
+ * Fetch distinct subjects that have at least one active course.
+ */
+export function useActiveSubjects() {
+  return useQuery<string[]>({
+    queryKey: ['active-subjects'],
+    queryFn: async () => {
+      const { data } = await api.get<ActiveSubjectsResponse>('/api/courses/active-subjects');
+      return data.data;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 /**
  * Fetch all courses.
  */
@@ -55,6 +73,7 @@ export function useUpdateCourse() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['courses'] });
+      queryClient.invalidateQueries({ queryKey: ['active-subjects'] });
     },
   });
 }

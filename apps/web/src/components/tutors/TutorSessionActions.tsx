@@ -1,13 +1,20 @@
 import React, { useState } from 'react';
 import { Popover, Button, Space, Modal, DatePicker, Select, Popconfirm, Form } from 'antd';
-import { EditOutlined, SwapOutlined, DeleteOutlined } from '@ant-design/icons';
+import { EditOutlined, SwapOutlined, DeleteOutlined, SettingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { DAY_NAMES } from '@homework/shared';
 import type { TutorSessionResolved } from '@homework/shared';
 import TimeInput from '../common/TimeInput';
 
+const DURATION_OPTIONS = [
+  { label: '1 час', value: 1 },
+  { label: '1.5 часа', value: 1.5 },
+  { label: '2 часа', value: 2 },
+];
+
 interface Props {
   session: TutorSessionResolved;
+  onEdit: (data: { id: string; time_start: string; duration_hours: number }) => void;
   onRescheduleOne: (data: { id: string; original_date: string; new_date: string; new_time: string }) => void;
   onRescheduleFollowing: (data: { id: string; from_date: string; new_day_of_week: number; new_time: string }) => void;
   onDelete: (id: string) => void;
@@ -21,14 +28,20 @@ const dayOptions = Object.entries(DAY_NAMES).map(([k, v]) => ({
 
 const TutorSessionActions: React.FC<Props> = ({
   session,
+  onEdit,
   onRescheduleOne,
   onRescheduleFollowing,
   onDelete,
   children,
 }) => {
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [rescheduleOneOpen, setRescheduleOneOpen] = useState(false);
   const [rescheduleFollowingOpen, setRescheduleFollowingOpen] = useState(false);
+
+  // Edit state
+  const [editTime, setEditTime] = useState('');
+  const [editDuration, setEditDuration] = useState(1);
 
   // Reschedule one state
   const [newDate, setNewDate] = useState<dayjs.Dayjs | null>(null);
@@ -37,6 +50,13 @@ const TutorSessionActions: React.FC<Props> = ({
   // Reschedule following state
   const [newDow, setNewDow] = useState<number>(session.day_of_week);
   const [newFollowingTime, setNewFollowingTime] = useState('');
+
+  const openEdit = () => {
+    setPopoverOpen(false);
+    setEditTime(session.time_start);
+    setEditDuration(session.duration_hours);
+    setEditOpen(true);
+  };
 
   const openRescheduleOne = () => {
     setPopoverOpen(false);
@@ -53,6 +73,16 @@ const TutorSessionActions: React.FC<Props> = ({
   };
 
   const isTimeValid = (t: string) => /^\d{2}:\d{2}$/.test(t);
+
+  const handleEdit = () => {
+    if (!isTimeValid(editTime)) return;
+    onEdit({
+      id: session.session_id,
+      time_start: editTime,
+      duration_hours: editDuration,
+    });
+    setEditOpen(false);
+  };
 
   const handleRescheduleOne = () => {
     if (!newDate || !isTimeValid(newTime)) return;
@@ -83,6 +113,15 @@ const TutorSessionActions: React.FC<Props> = ({
 
   const content = (
     <Space direction="vertical" size="small">
+      <Button
+        type="text"
+        icon={<SettingOutlined />}
+        onClick={openEdit}
+        block
+        style={{ textAlign: 'left' }}
+      >
+        Редактировать
+      </Button>
       {session.is_recurring && (
         <>
           <Button
@@ -130,6 +169,25 @@ const TutorSessionActions: React.FC<Props> = ({
       >
         {children}
       </Popover>
+
+      <Modal
+        title="Редактировать занятие"
+        open={editOpen}
+        onOk={handleEdit}
+        onCancel={() => setEditOpen(false)}
+        okText="Сохранить"
+        cancelText="Отмена"
+        okButtonProps={{ disabled: !isTimeValid(editTime) }}
+      >
+        <Form layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item label="Время начала">
+            <TimeInput value={editTime} onChange={setEditTime} />
+          </Form.Item>
+          <Form.Item label="Длительность">
+            <Select value={editDuration} onChange={setEditDuration} options={DURATION_OPTIONS} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         title="Перенести это занятие"

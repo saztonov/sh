@@ -36,6 +36,11 @@ const createSessionSchema = z.object({
   effective_from: z.string().nullable().optional(),
 });
 
+const updateSessionSchema = z.object({
+  time_start: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  duration_hours: z.number().refine((v) => [1, 1.5, 2].includes(v), { message: 'Must be 1, 1.5, or 2' }).optional(),
+});
+
 const rescheduleOneSchema = z.object({
   original_date: z.string(),
   new_date: z.string(),
@@ -347,6 +352,31 @@ const tutorRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: 'Failed to create tutor session' });
     }
     return reply.code(201).send({ data });
+  });
+
+  fastify.put<{ Params: { id: string } }>('/tutor-sessions/:id', async (request, reply) => {
+    const { id } = request.params;
+    const parsed = updateSessionSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid body', details: parsed.error.flatten() });
+    }
+
+    const updateData: Record<string, unknown> = {};
+    if (parsed.data.time_start !== undefined) updateData.time_start = parsed.data.time_start;
+    if (parsed.data.duration_hours !== undefined) updateData.duration_hours = parsed.data.duration_hours;
+
+    const { data, error } = await supabase
+      .from('tutor_sessions')
+      .update(updateData)
+      .eq('id', id)
+      .select('*, tutor:tutors!inner(name)')
+      .single();
+
+    if (error || !data) {
+      request.log.error(error, 'Failed to update tutor session');
+      return reply.code(error ? 500 : 404).send({ error: 'Failed to update tutor session' });
+    }
+    return { data };
   });
 
   fastify.delete<{ Params: { id: string } }>('/tutor-sessions/:id', async (request, reply) => {

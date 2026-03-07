@@ -97,6 +97,17 @@ export function useCreateTutorSession() {
   });
 }
 
+export function useUpdateTutorSession() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...body }: { id: string; time_start?: string; duration_hours?: number }) => {
+      const { data } = await api.put(`/api/tutor-sessions/${id}`, body);
+      return data.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tutor-sessions'] }),
+  });
+}
+
 export function useDeleteTutorSession() {
   const qc = useQueryClient();
   return useMutation({

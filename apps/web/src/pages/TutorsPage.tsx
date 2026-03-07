@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Button, Space, Typography, Spin, Alert, Card, Empty, Tag, message, Tooltip } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { LeftOutlined, RightOutlined, PlusOutlined, CalendarOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { Table } from 'antd';
 import dayjs from 'dayjs';
@@ -10,6 +10,7 @@ import {
   useTutors,
   useTutorSessions,
   useCreateTutorSession,
+  useUpdateTutorSession,
   useDeleteTutorSession,
   useRescheduleOne,
   useRescheduleFollowing,
@@ -26,7 +27,7 @@ interface RowData {
   key: string;
   tutor_name: string;
   subject: string;
-  sessions: Map<number, TutorSessionResolved[]>; // day_of_week -> sessions
+  sessions: Map<number, TutorSessionResolved[]>;
 }
 
 function buildRows(sessions: TutorSessionResolved[] | undefined): RowData[] {
@@ -72,14 +73,20 @@ function formatDuration(h: number): string {
 }
 
 const TutorsPage: React.FC = () => {
+  const [weekOffset, setWeekOffset] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const isMobile = useIsMobile();
   const [messageApi, contextHolder] = message.useMessage();
 
+  const goToPrevWeek = () => setWeekOffset((prev) => prev - 1);
+  const goToNextWeek = () => setWeekOffset((prev) => prev + 1);
+  const goToCurrentWeek = () => setWeekOffset(0);
+
   const { data: tutors = [] } = useTutors();
-  const { data: sessionsWeek0, isLoading: loading0, error: error0 } = useTutorSessions(0);
-  const { data: sessionsWeek1, isLoading: loading1, error: error1 } = useTutorSessions(1);
+  const { data: sessionsWeek0, isLoading: loading0, error: error0 } = useTutorSessions(weekOffset);
+  const { data: sessionsWeek1, isLoading: loading1, error: error1 } = useTutorSessions(weekOffset + 1);
   const createSession = useCreateTutorSession();
+  const updateSession = useUpdateTutorSession();
   const deleteSession = useDeleteTutorSession();
   const rescheduleOne = useRescheduleOne();
   const rescheduleFollowing = useRescheduleFollowing();
@@ -99,8 +106,8 @@ const TutorsPage: React.FC = () => {
 
   const rows0 = useMemo(() => buildRows(sessionsWeek0), [sessionsWeek0]);
   const rows1 = useMemo(() => buildRows(sessionsWeek1), [sessionsWeek1]);
-  const weekDates0 = useMemo(() => buildWeekDates(0), []);
-  const weekDates1 = useMemo(() => buildWeekDates(1), []);
+  const weekDates0 = useMemo(() => buildWeekDates(weekOffset), [weekOffset]);
+  const weekDates1 = useMemo(() => buildWeekDates(weekOffset + 1), [weekOffset]);
 
   const handleCreate = async (values: {
     tutor_id: string;
@@ -118,6 +125,15 @@ const TutorsPage: React.FC = () => {
       setModalOpen(false);
     } catch {
       messageApi.error('Не удалось добавить занятие');
+    }
+  };
+
+  const handleEdit = async (data: { id: string; time_start: string; duration_hours: number }) => {
+    try {
+      await updateSession.mutateAsync(data);
+      messageApi.success('Занятие обновлено');
+    } catch {
+      messageApi.error('Не удалось обновить занятие');
     }
   };
 
@@ -205,6 +221,7 @@ const TutorsPage: React.FC = () => {
                 <TutorSessionActions
                   key={`${s.session_id}-${s.date}`}
                   session={s}
+                  onEdit={handleEdit}
                   onRescheduleOne={handleRescheduleOne}
                   onRescheduleFollowing={handleRescheduleFollowing}
                   onDelete={handleDelete}
@@ -252,15 +269,20 @@ const TutorsPage: React.FC = () => {
     })),
   ];
 
+  const weekLabel = (offset: number): string => {
+    if (offset === 0) return 'Текущая неделя';
+    if (offset === 1) return 'Следующая неделя';
+    return formatWeekRange(offset);
+  };
+
   const renderWeekTable = (
-    label: string,
-    weekOffset: number,
+    offset: number,
     rows: RowData[],
     weekDates: { dow: number; date: string; isToday: boolean }[],
   ) => (
-    <Card style={{ borderRadius: 12, marginBottom: 16 }} key={weekOffset}>
+    <Card style={{ borderRadius: 12, marginBottom: 16 }} key={offset}>
       <Text strong style={{ display: 'block', marginBottom: 12, fontSize: 15 }}>
-        {label} ({formatWeekRange(weekOffset)})
+        {weekLabel(offset)} ({formatWeekRange(offset)})
       </Text>
       {rows.length === 0 ? (
         <Empty
@@ -297,14 +319,37 @@ const TutorsPage: React.FC = () => {
           Репетиторы
         </Title>
 
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setModalOpen(true)}
-          size={isMobile ? 'small' : 'middle'}
-        >
-          Добавить
-        </Button>
+        <Space wrap>
+          <Space size="small">
+            <Button icon={<LeftOutlined />} onClick={goToPrevWeek} size={isMobile ? 'small' : 'middle'} />
+            <Text
+              strong
+              style={{ minWidth: isMobile ? 140 : 200, textAlign: 'center', display: 'inline-block' }}
+            >
+              {formatWeekRange(weekOffset)}
+            </Text>
+            <Button icon={<RightOutlined />} onClick={goToNextWeek} size={isMobile ? 'small' : 'middle'} />
+          </Space>
+
+          {weekOffset !== 0 && (
+            <Button
+              icon={<CalendarOutlined />}
+              onClick={goToCurrentWeek}
+              size={isMobile ? 'small' : 'middle'}
+            >
+              Текущая
+            </Button>
+          )}
+
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setModalOpen(true)}
+            size={isMobile ? 'small' : 'middle'}
+          >
+            Добавить
+          </Button>
+        </Space>
       </div>
 
       {isLoading && (
@@ -324,8 +369,8 @@ const TutorsPage: React.FC = () => {
 
       {!isLoading && !error && (
         <>
-          {renderWeekTable('Текущая неделя', 0, rows0, weekDates0)}
-          {renderWeekTable('Следующая неделя', 1, rows1, weekDates1)}
+          {renderWeekTable(weekOffset, rows0, weekDates0)}
+          {renderWeekTable(weekOffset + 1, rows1, weekDates1)}
         </>
       )}
 

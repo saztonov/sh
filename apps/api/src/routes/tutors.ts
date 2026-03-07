@@ -21,6 +21,10 @@ const createTutorSchema = z.object({
   name: z.string().min(1),
 });
 
+const updateSubjectsSchema = z.object({
+  subjects: z.array(z.string().min(1)),
+});
+
 const createSessionSchema = z.object({
   tutor_id: z.string().uuid(),
   subject: z.string().min(1),
@@ -28,6 +32,7 @@ const createSessionSchema = z.object({
   time_start: z.string().regex(/^\d{2}:\d{2}$/),
   is_recurring: z.boolean(),
   specific_date: z.string().nullable().optional(),
+  effective_from: z.string().nullable().optional(),
 });
 
 const rescheduleOneSchema = z.object({
@@ -50,14 +55,22 @@ const tutorRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/tutors', async (request, reply) => {
     const { data, error } = await supabase
       .from('tutors')
-      .select('*')
+      .select('*, tutor_subjects(subject)')
       .order('name', { ascending: true });
 
     if (error) {
       request.log.error(error, 'Failed to fetch tutors');
       return reply.code(500).send({ error: 'Failed to fetch tutors' });
     }
-    return { data: data as Tutor[] };
+
+    const tutors: Tutor[] = (data ?? []).map((t: any) => ({
+      id: t.id,
+      name: t.name,
+      subjects: (t.tutor_subjects ?? []).map((s: any) => s.subject),
+      created_at: t.created_at,
+    }));
+
+    return { data: tutors };
   });
 
   fastify.post('/tutors', async (request, reply) => {
@@ -109,6 +122,40 @@ const tutorRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(500).send({ error: 'Failed to delete tutor' });
     }
     return reply.code(204).send();
+  });
+
+  fastify.put<{ Params: { id: string } }>('/tutors/:id/subjects', async (request, reply) => {
+    const { id } = request.params;
+    const parsed = updateSubjectsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid body', details: parsed.error.flatten() });
+    }
+
+    // Delete existing subjects
+    const { error: deleteError } = await supabase
+      .from('tutor_subjects')
+      .delete()
+      .eq('tutor_id', id);
+
+    if (deleteError) {
+      request.log.error(deleteError, 'Failed to delete tutor subjects');
+      return reply.code(500).send({ error: 'Failed to update subjects' });
+    }
+
+    // Insert new subjects
+    if (parsed.data.subjects.length > 0) {
+      const rows = parsed.data.subjects.map((subject) => ({ tutor_id: id, subject }));
+      const { error: insertError } = await supabase
+        .from('tutor_subjects')
+        .insert(rows);
+
+      if (insertError) {
+        request.log.error(insertError, 'Failed to insert tutor subjects');
+        return reply.code(500).send({ error: 'Failed to update subjects' });
+      }
+    }
+
+    return { data: parsed.data.subjects };
   });
 
   // ── Tutor sessions ──
@@ -281,7 +328,7 @@ const tutorRoutes: FastifyPluginAsync = async (fastify) => {
       insertData.specific_date = parsed.data.specific_date;
     }
     if (parsed.data.is_recurring) {
-      insertData.effective_from = dayjs().format('YYYY-MM-DD');
+      insertData.effective_from = parsed.data.effective_from ?? dayjs().format('YYYY-MM-DD');
     }
 
     const { data, error } = await supabase

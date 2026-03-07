@@ -50,6 +50,17 @@ export function useDeleteTutor() {
   });
 }
 
+export function useUpdateTutorSubjects() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, subjects }: { id: string; subjects: string[] }) => {
+      const { data } = await api.put<{ data: string[] }>(`/api/tutors/${id}/subjects`, { subjects });
+      return data.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tutors'] }),
+  });
+}
+
 // ── Tutor sessions ──
 
 export function useTutorSessions(weekOffset: number) {
@@ -76,6 +87,7 @@ export function useCreateTutorSession() {
       time_start: string;
       is_recurring: boolean;
       specific_date?: string | null;
+      effective_from?: string | null;
     }) => {
       const { data } = await api.post('/api/tutor-sessions', body);
       return data.data;

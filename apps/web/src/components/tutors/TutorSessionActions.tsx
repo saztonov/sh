@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Popover, Button, Space, Modal, DatePicker, TimePicker, Select, Popconfirm, Form } from 'antd';
+import { Popover, Button, Space, Modal, DatePicker, Select, Popconfirm, Form } from 'antd';
 import { EditOutlined, SwapOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { DAY_NAMES } from '@homework/shared';
 import type { TutorSessionResolved } from '@homework/shared';
+import TimeInput from '../common/TimeInput';
 
 interface Props {
   session: TutorSessionResolved;
@@ -31,44 +32,46 @@ const TutorSessionActions: React.FC<Props> = ({
 
   // Reschedule one state
   const [newDate, setNewDate] = useState<dayjs.Dayjs | null>(null);
-  const [newTime, setNewTime] = useState<dayjs.Dayjs | null>(null);
+  const [newTime, setNewTime] = useState('');
 
   // Reschedule following state
   const [newDow, setNewDow] = useState<number>(session.day_of_week);
-  const [newFollowingTime, setNewFollowingTime] = useState<dayjs.Dayjs | null>(null);
+  const [newFollowingTime, setNewFollowingTime] = useState('');
 
   const openRescheduleOne = () => {
     setPopoverOpen(false);
     setNewDate(dayjs(session.date));
-    setNewTime(dayjs(session.time_start, 'HH:mm'));
+    setNewTime(session.time_start);
     setRescheduleOneOpen(true);
   };
 
   const openRescheduleFollowing = () => {
     setPopoverOpen(false);
     setNewDow(session.day_of_week);
-    setNewFollowingTime(dayjs(session.time_start, 'HH:mm'));
+    setNewFollowingTime(session.time_start);
     setRescheduleFollowingOpen(true);
   };
 
+  const isTimeValid = (t: string) => /^\d{2}:\d{2}$/.test(t);
+
   const handleRescheduleOne = () => {
-    if (!newDate || !newTime) return;
+    if (!newDate || !isTimeValid(newTime)) return;
     onRescheduleOne({
       id: session.session_id,
       original_date: session.date,
       new_date: newDate.format('YYYY-MM-DD'),
-      new_time: newTime.format('HH:mm'),
+      new_time: newTime,
     });
     setRescheduleOneOpen(false);
   };
 
   const handleRescheduleFollowing = () => {
-    if (!newFollowingTime) return;
+    if (!isTimeValid(newFollowingTime)) return;
     onRescheduleFollowing({
       id: session.session_id,
       from_date: session.date,
       new_day_of_week: newDow,
-      new_time: newFollowingTime.format('HH:mm'),
+      new_time: newFollowingTime,
     });
     setRescheduleFollowingOpen(false);
   };
@@ -135,7 +138,7 @@ const TutorSessionActions: React.FC<Props> = ({
         onCancel={() => setRescheduleOneOpen(false)}
         okText="Перенести"
         cancelText="Отмена"
-        okButtonProps={{ disabled: !newDate || !newTime }}
+        okButtonProps={{ disabled: !newDate || !isTimeValid(newTime) }}
       >
         <Form layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item label="Новая дата">
@@ -146,12 +149,7 @@ const TutorSessionActions: React.FC<Props> = ({
             />
           </Form.Item>
           <Form.Item label="Новое время">
-            <TimePicker
-              value={newTime}
-              onChange={setNewTime}
-              format="HH:mm"
-              minuteStep={5}
-            />
+            <TimeInput value={newTime} onChange={setNewTime} />
           </Form.Item>
         </Form>
       </Modal>
@@ -163,19 +161,14 @@ const TutorSessionActions: React.FC<Props> = ({
         onCancel={() => setRescheduleFollowingOpen(false)}
         okText="Перенести"
         cancelText="Отмена"
-        okButtonProps={{ disabled: !newFollowingTime }}
+        okButtonProps={{ disabled: !isTimeValid(newFollowingTime) }}
       >
         <Form layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item label="Новый день недели">
             <Select value={newDow} onChange={setNewDow} options={dayOptions} />
           </Form.Item>
           <Form.Item label="Новое время">
-            <TimePicker
-              value={newFollowingTime}
-              onChange={setNewFollowingTime}
-              format="HH:mm"
-              minuteStep={5}
-            />
+            <TimeInput value={newFollowingTime} onChange={setNewFollowingTime} />
           </Form.Item>
         </Form>
       </Modal>

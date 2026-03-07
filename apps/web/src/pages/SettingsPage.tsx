@@ -49,7 +49,9 @@ import {
   useCreateTutor,
   useUpdateTutor,
   useDeleteTutor,
+  useUpdateTutorSubjects,
 } from '../hooks/useTutors';
+import { getSubjectColor } from '../lib/format';
 import {
   useCourses,
   useUpdateCourse,
@@ -856,11 +858,14 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
 
 // --- Tutors Directory Tab ---
 
+const tutorSubjectOptions = SUBJECTS.map((s) => ({ label: s, value: s }));
+
 const TutorsDirectoryTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
   const { data: tutors, isLoading, error } = useTutors();
   const createTutor = useCreateTutor();
   const updateTutor = useUpdateTutor();
   const deleteTutor = useDeleteTutor();
+  const updateSubjects = useUpdateTutorSubjects();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTutor, setEditingTutor] = useState<Tutor | null>(null);
@@ -905,11 +910,47 @@ const TutorsDirectoryTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
     }
   };
 
+  const handleSubjectsChange = async (tutorId: string, subjects: string[]) => {
+    try {
+      await updateSubjects.mutateAsync({ id: tutorId, subjects });
+    } catch {
+      messageApi.error('Не удалось обновить предметы');
+    }
+  };
+
   const columns: ColumnsType<Tutor> = [
     {
       title: 'Имя',
       dataIndex: 'name',
       key: 'name',
+      width: isMobile ? 120 : 200,
+    },
+    {
+      title: 'Предметы',
+      key: 'subjects',
+      render: (_: unknown, record: Tutor) => (
+        <Select
+          mode="multiple"
+          placeholder="Выберите предметы"
+          value={record.subjects ?? []}
+          onChange={(values) => handleSubjectsChange(record.id, values)}
+          options={tutorSubjectOptions}
+          style={{ width: '100%' }}
+          maxTagCount="responsive"
+          tagRender={({ label, closable, onClose }) => (
+            <Tag
+              color={getSubjectColor(label as string)}
+              closable={closable}
+              onClose={onClose}
+              style={{ marginInlineEnd: 4 }}
+            >
+              {label}
+            </Tag>
+          )}
+          showSearch
+          optionFilterProp="label"
+        />
+      ),
     },
     {
       title: 'Действия',

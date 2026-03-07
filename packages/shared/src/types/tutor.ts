@@ -1,6 +1,7 @@
 export interface Tutor {
   id: string;
   name: string;
+  subjects?: string[];
   created_at: string;
 }
 

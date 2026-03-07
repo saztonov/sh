@@ -90,6 +90,7 @@ const TutorsPage: React.FC = () => {
     time_start: string;
     is_recurring: boolean;
     specific_date?: string;
+    effective_from?: string;
   }) => {
     try {
       await createSession.mutateAsync(values);

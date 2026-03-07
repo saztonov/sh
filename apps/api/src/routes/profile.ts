@@ -1,7 +1,18 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
 import { supabase } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { BANNED_PASSWORDS } from '@homework/shared';
 import type { UserProfile } from '@homework/shared';
+
+const changeMyPasswordSchema = z.object({
+  password: z
+    .string()
+    .min(8, 'Минимум 8 символов')
+    .refine((v) => !BANNED_PASSWORDS.includes(v.toLowerCase()), {
+      message: 'Слишком простой пароль',
+    }),
+});
 
 const profileRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', authMiddleware);
@@ -35,6 +46,25 @@ const profileRoutes: FastifyPluginAsync = async (fastify) => {
         created_at: profile.created_at,
       } satisfies UserProfile,
     };
+  });
+
+  // PATCH /auth/me/password — change own password
+  fastify.patch('/auth/me/password', async (request, reply) => {
+    const parsed = changeMyPasswordSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Ошибка валидации', details: parsed.error.flatten() });
+    }
+
+    const { error } = await supabase.auth.admin.updateUserById(request.user.id, {
+      password: parsed.data.password,
+    });
+
+    if (error) {
+      request.log.error(error, 'Failed to change own password');
+      return reply.code(500).send({ error: 'Не удалось изменить пароль' });
+    }
+
+    return { success: true };
   });
 };
 

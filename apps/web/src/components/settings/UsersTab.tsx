@@ -13,12 +13,12 @@ import {
   Typography,
   message,
 } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, KeyOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { BANNED_PASSWORDS } from '@homework/shared';
 import type { UserProfile, UserRole } from '@homework/shared';
-import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '../../hooks/useUsers';
+import { useUsers, useCreateUser, useUpdateUser, useDeleteUser, useChangeUserPassword } from '../../hooks/useUsers';
 
 const { Text } = Typography;
 
@@ -43,10 +43,14 @@ const UsersTab: React.FC<UsersTabProps> = ({ isMobile, messageApi, currentUserId
   const createUser = useCreateUser();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
+  const changePassword = useChangeUserPassword();
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordTargetUser, setPasswordTargetUser] = useState<UserProfile | null>(null);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [form] = Form.useForm();
+  const [passwordForm] = Form.useForm();
 
   const openCreate = () => {
     setEditingUser(null);
@@ -88,6 +92,27 @@ const UsersTab: React.FC<UsersTabProps> = ({ isMobile, messageApi, currentUserId
       setModalOpen(false);
     } catch (err: any) {
       const msg = err?.response?.data?.error || 'Не удалось сохранить';
+      messageApi.error(msg);
+    }
+  };
+
+  const openPasswordModal = (user: UserProfile) => {
+    setPasswordTargetUser(user);
+    passwordForm.resetFields();
+    setPasswordModalOpen(true);
+  };
+
+  const handleChangePassword = async () => {
+    try {
+      const values = await passwordForm.validateFields();
+      await changePassword.mutateAsync({
+        id: passwordTargetUser!.id,
+        password: values.password,
+      });
+      messageApi.success('Пароль изменён');
+      setPasswordModalOpen(false);
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || 'Не удалось изменить пароль';
       messageApi.error(msg);
     }
   };
@@ -144,6 +169,13 @@ const UsersTab: React.FC<UsersTabProps> = ({ isMobile, messageApi, currentUserId
             size="small"
             icon={<EditOutlined />}
             onClick={() => openEdit(record)}
+          />
+          <Button
+            type="text"
+            size="small"
+            icon={<KeyOutlined />}
+            onClick={() => openPasswordModal(record)}
+            title="Изменить пароль"
           />
           {record.id !== currentUserId && (
             <Popconfirm
@@ -253,6 +285,38 @@ const UsersTab: React.FC<UsersTabProps> = ({ isMobile, messageApi, currentUserId
                 { value: 'admin', label: 'Администратор' },
               ]}
             />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={`Изменить пароль: ${passwordTargetUser?.display_name ?? ''}`}
+        open={passwordModalOpen}
+        onOk={handleChangePassword}
+        onCancel={() => setPasswordModalOpen(false)}
+        okText="Изменить"
+        cancelText="Отмена"
+        confirmLoading={changePassword.isPending}
+        destroyOnClose
+      >
+        <Form form={passwordForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item
+            name="password"
+            label="Новый пароль"
+            rules={[
+              { required: true, message: 'Введите пароль' },
+              { min: 8, message: 'Минимум 8 символов' },
+              {
+                validator: (_, value) => {
+                  if (value && BANNED_PASSWORDS.includes(value.toLowerCase())) {
+                    return Promise.reject('Слишком простой пароль');
+                  }
+                  return Promise.resolve();
+                },
+              },
+            ]}
+          >
+            <Input.Password placeholder="Минимум 8 символов" />
           </Form.Item>
         </Form>
       </Modal>

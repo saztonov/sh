@@ -69,6 +69,12 @@ const AppLayout: React.FC = () => {
     },
     { type: 'divider' },
     {
+      key: 'profile',
+      icon: <UserOutlined />,
+      label: 'Профиль',
+      onClick: () => navigate('/profile'),
+    },
+    {
       key: 'logout',
       icon: <LogoutOutlined />,
       label: 'Выйти',

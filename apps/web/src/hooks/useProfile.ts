@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import type { UserProfile } from '@homework/shared';
 import api from '../lib/api';
 
@@ -10,5 +10,13 @@ export function useProfile() {
       return data.data;
     },
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useChangeMyPassword() {
+  return useMutation({
+    mutationFn: async (password: string) => {
+      await api.patch('/api/auth/me/password', { password });
+    },
   });
 }

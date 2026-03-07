@@ -23,6 +23,15 @@ const updateUserSchema = z.object({
   role: z.enum(['user', 'admin']).optional(),
 });
 
+const changePasswordSchema = z.object({
+  password: z
+    .string()
+    .min(8, 'Минимум 8 символов')
+    .refine((v) => !BANNED_PASSWORDS.includes(v.toLowerCase()), {
+      message: 'Слишком простой пароль',
+    }),
+});
+
 const userRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.addHook('preHandler', authMiddleware);
   fastify.addHook('preHandler', adminMiddleware);
@@ -165,6 +174,26 @@ const userRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     return { data };
+  });
+
+  // PATCH /users/:id/password — admin changes user's password
+  fastify.patch<{ Params: { id: string } }>('/users/:id/password', async (request, reply) => {
+    const { id } = request.params;
+    const parsed = changePasswordSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Ошибка валидации', details: parsed.error.flatten() });
+    }
+
+    const { error } = await supabase.auth.admin.updateUserById(id, {
+      password: parsed.data.password,
+    });
+
+    if (error) {
+      request.log.error(error, 'Failed to change user password');
+      return reply.code(500).send({ error: 'Не удалось изменить пароль' });
+    }
+
+    return { success: true };
   });
 
   // DELETE /users/:id — delete user

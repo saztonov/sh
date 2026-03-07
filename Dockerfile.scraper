@@ -6,6 +6,7 @@ COPY packages/shared/package.json packages/shared/
 COPY apps/scraper/package.json apps/scraper/
 RUN npm ci --workspace=packages/shared --workspace=apps/scraper
 
+COPY tsconfig.base.json ./
 COPY packages/shared packages/shared
 COPY apps/scraper apps/scraper
 RUN npm run build -w packages/shared && npm run build -w apps/scraper

@@ -23,38 +23,15 @@ import TutorSessionActions from '../components/tutors/TutorSessionActions';
 
 const { Title, Text } = Typography;
 
-interface RowData {
+interface FlatRow {
   key: string;
+  dow: number;
+  date: string;
+  isToday: boolean;
   tutor_name: string;
   subject: string;
-  sessions: Map<number, TutorSessionResolved[]>;
-}
-
-function buildRows(sessions: TutorSessionResolved[] | undefined): RowData[] {
-  if (!sessions) return [];
-
-  const groupMap = new Map<string, RowData>();
-
-  for (const s of sessions) {
-    const key = `${s.tutor_id}:${s.subject}`;
-    let row = groupMap.get(key);
-    if (!row) {
-      row = {
-        key,
-        tutor_name: s.tutor_name,
-        subject: s.subject,
-        sessions: new Map(),
-      };
-      groupMap.set(key, row);
-    }
-    const dayList = row.sessions.get(s.day_of_week) ?? [];
-    dayList.push(s);
-    row.sessions.set(s.day_of_week, dayList);
-  }
-
-  return Array.from(groupMap.values()).sort((a, b) =>
-    a.tutor_name.localeCompare(b.tutor_name, 'ru'),
-  );
+  sessions: TutorSessionResolved[];
+  dayRowSpan: number;
 }
 
 function buildWeekDates(weekOffset: number) {
@@ -64,6 +41,51 @@ function buildWeekDates(weekOffset: number) {
     date: monday.isoWeekday(dow).format('DD.MM'),
     isToday: monday.isoWeekday(dow).isSame(dayjs(), 'day'),
   }));
+}
+
+function buildFlatRows(
+  sessions: TutorSessionResolved[] | undefined,
+  weekDates: { dow: number; date: string; isToday: boolean }[],
+): FlatRow[] {
+  if (!sessions || sessions.length === 0) return [];
+
+  const dayGroups = new Map<number, Map<string, { tutor_name: string; subject: string; sessions: TutorSessionResolved[] }>>();
+
+  for (const s of sessions) {
+    if (!dayGroups.has(s.day_of_week)) dayGroups.set(s.day_of_week, new Map());
+    const tutorKey = `${s.tutor_id}:${s.subject}`;
+    const group = dayGroups.get(s.day_of_week)!;
+    if (!group.has(tutorKey)) {
+      group.set(tutorKey, { tutor_name: s.tutor_name, subject: s.subject, sessions: [] });
+    }
+    group.get(tutorKey)!.sessions.push(s);
+  }
+
+  const rows: FlatRow[] = [];
+
+  for (const wd of weekDates) {
+    const tutorMap = dayGroups.get(wd.dow);
+    if (!tutorMap || tutorMap.size === 0) continue;
+
+    const entries = Array.from(tutorMap.entries()).sort(([, a], [, b]) =>
+      a.tutor_name.localeCompare(b.tutor_name, 'ru'),
+    );
+
+    entries.forEach(([tutorKey, data], idx) => {
+      rows.push({
+        key: `${wd.dow}:${tutorKey}`,
+        dow: wd.dow,
+        date: wd.date,
+        isToday: wd.isToday,
+        tutor_name: data.tutor_name,
+        subject: data.subject,
+        sessions: data.sessions.sort((a, b) => a.time_start.localeCompare(b.time_start)),
+        dayRowSpan: idx === 0 ? entries.length : 0,
+      });
+    });
+  }
+
+  return rows;
 }
 
 function formatDuration(h: number): string {
@@ -104,10 +126,10 @@ const TutorsPage: React.FC = () => {
     [allSessions],
   );
 
-  const rows0 = useMemo(() => buildRows(sessionsWeek0), [sessionsWeek0]);
-  const rows1 = useMemo(() => buildRows(sessionsWeek1), [sessionsWeek1]);
   const weekDates0 = useMemo(() => buildWeekDates(weekOffset), [weekOffset]);
   const weekDates1 = useMemo(() => buildWeekDates(weekOffset + 1), [weekOffset]);
+  const flatRows0 = useMemo(() => buildFlatRows(sessionsWeek0, weekDates0), [sessionsWeek0, weekDates0]);
+  const flatRows1 = useMemo(() => buildFlatRows(sessionsWeek1, weekDates1), [sessionsWeek1, weekDates1]);
 
   const handleCreate = async (values: {
     tutor_id: string;
@@ -174,15 +196,27 @@ const TutorsPage: React.FC = () => {
     }
   };
 
-  const buildColumns = (
-    weekDates: { dow: number; date: string; isToday: boolean }[],
-  ): ColumnsType<RowData> => [
+  const columns: ColumnsType<FlatRow> = [
+    {
+      title: 'День',
+      key: 'day',
+      width: isMobile ? 50 : 90,
+      onCell: (record) => ({ rowSpan: record.dayRowSpan }),
+      render: (_: unknown, record: FlatRow) => (
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontWeight: record.isToday ? 700 : 500, color: record.isToday ? '#1677ff' : undefined }}>
+            {DAY_NAMES_SHORT[record.dow]}
+          </div>
+          <div style={{ fontSize: 11, color: record.isToday ? '#1677ff' : '#8c8c8c' }}>
+            {record.date}
+          </div>
+        </div>
+      ),
+    },
     {
       title: 'Репетитор',
       key: 'tutor',
-      width: isMobile ? 120 : 180,
-      fixed: isMobile ? 'left' : undefined,
-      render: (_: unknown, record: RowData) => (
+      render: (_: unknown, record: FlatRow) => (
         <div>
           <div style={{ fontWeight: 500 }}>{record.tutor_name}</div>
           <Tag
@@ -194,79 +228,66 @@ const TutorsPage: React.FC = () => {
         </div>
       ),
     },
-    ...weekDates.map(({ dow, date, isToday }) => ({
-      title: (
-        <div style={{ textAlign: 'center' as const }}>
-          <div style={{ fontWeight: isToday ? 700 : 400, color: isToday ? '#1677ff' : undefined }}>
-            {DAY_NAMES_SHORT[dow]}
-          </div>
-          <div style={{ fontSize: 11, color: isToday ? '#1677ff' : '#8c8c8c' }}>{date}</div>
-        </div>
-      ),
-      key: `day-${dow}`,
-      width: isMobile ? 70 : 100,
-      align: 'center' as const,
-      render: (_: unknown, record: RowData) => {
-        const daySessions = record.sessions.get(dow);
-        if (!daySessions || daySessions.length === 0) return null;
+    {
+      title: 'Время',
+      key: 'time',
+      width: isMobile ? 90 : 120,
+      render: (_: unknown, record: FlatRow) => (
+        <Space direction="vertical" size={2}>
+          {record.sessions.map((s) => {
+            const conflictKey = `${s.session_id}:${s.date}`;
+            const conflictMsg = conflictKeys.get(conflictKey);
+            const hasConflict = !!conflictMsg;
 
-        return (
-          <Space direction="vertical" size={2}>
-            {daySessions.map((s) => {
-              const conflictKey = `${s.session_id}:${s.date}`;
-              const conflictMsg = conflictKeys.get(conflictKey);
-              const hasConflict = !!conflictMsg;
-
-              const btn = (
-                <TutorSessionActions
-                  key={`${s.session_id}-${s.date}`}
-                  session={s}
-                  onEdit={handleEdit}
-                  onRescheduleOne={handleRescheduleOne}
-                  onRescheduleFollowing={handleRescheduleFollowing}
-                  onDelete={handleDelete}
+            const btn = (
+              <TutorSessionActions
+                key={`${s.session_id}-${s.date}`}
+                session={s}
+                onEdit={handleEdit}
+                onRescheduleOne={handleRescheduleOne}
+                onRescheduleFollowing={handleRescheduleFollowing}
+                onDelete={handleDelete}
+              >
+                <Button
+                  type="text"
+                  size="small"
+                  style={{
+                    fontWeight: 500,
+                    color: hasConflict
+                      ? '#ff4d4f'
+                      : s.is_exception
+                        ? '#fa8c16'
+                        : '#1677ff',
+                    border: hasConflict
+                      ? '1px solid #ff4d4f'
+                      : s.is_exception
+                        ? '1px dashed #fa8c16'
+                        : undefined,
+                    borderRadius: 6,
+                    padding: '2px 8px',
+                    height: 'auto',
+                  }}
                 >
-                  <Button
-                    type="text"
-                    size="small"
-                    style={{
-                      fontWeight: 500,
-                      color: hasConflict
-                        ? '#ff4d4f'
-                        : s.is_exception
-                          ? '#fa8c16'
-                          : '#1677ff',
-                      border: hasConflict
-                        ? '1px solid #ff4d4f'
-                        : s.is_exception
-                          ? '1px dashed #fa8c16'
-                          : undefined,
-                      borderRadius: 6,
-                      padding: '2px 8px',
-                      height: 'auto',
-                    }}
-                  >
-                    {s.time_start}
-                    <span style={{ fontSize: 10, marginLeft: 2, opacity: 0.7 }}>
-                      {formatDuration(s.duration_hours)}
-                    </span>
-                  </Button>
-                </TutorSessionActions>
-              );
+                  {s.time_start}
+                  <span style={{ fontSize: 10, marginLeft: 2, opacity: 0.7 }}>
+                    {formatDuration(s.duration_hours)}
+                  </span>
+                </Button>
+              </TutorSessionActions>
+            );
 
-              if (hasConflict) {
-                return (
-                  <Tooltip key={`${s.session_id}-${s.date}`} title={conflictMsg} color="#ff4d4f">
-                    {btn}
-                  </Tooltip>
-                );
-              }
-              return btn;
-            })}
-          </Space>
-        );
-      },
-    })),
+            if (hasConflict) {
+              return (
+                <Tooltip key={`${s.session_id}-${s.date}`} title={conflictMsg} color="#ff4d4f">
+                  {btn}
+                </Tooltip>
+              );
+            }
+            return btn;
+          })}
+        </Space>
+      ),
+    },
   ];
 
   const weekLabel = (offset: number): string => {
@@ -277,8 +298,7 @@ const TutorsPage: React.FC = () => {
 
   const renderWeekTable = (
     offset: number,
-    rows: RowData[],
-    weekDates: { dow: number; date: string; isToday: boolean }[],
+    rows: FlatRow[],
   ) => (
     <Card style={{ borderRadius: 12, marginBottom: 16 }} key={offset}>
       <Text strong style={{ display: 'block', marginBottom: 12, fontSize: 15 }}>
@@ -290,12 +310,11 @@ const TutorsPage: React.FC = () => {
           image={Empty.PRESENTED_IMAGE_SIMPLE}
         />
       ) : (
-        <Table<RowData>
-          columns={buildColumns(weekDates)}
+        <Table<FlatRow>
+          columns={columns}
           dataSource={rows}
           pagination={false}
           size={isMobile ? 'small' : 'middle'}
-          scroll={isMobile ? { x: 620 } : undefined}
           bordered
         />
       )}
@@ -369,8 +388,8 @@ const TutorsPage: React.FC = () => {
 
       {!isLoading && !error && (
         <>
-          {renderWeekTable(weekOffset, rows0, weekDates0)}
-          {renderWeekTable(weekOffset + 1, rows1, weekDates1)}
+          {renderWeekTable(weekOffset, flatRows0)}
+          {renderWeekTable(weekOffset + 1, flatRows1)}
         </>
       )}
 

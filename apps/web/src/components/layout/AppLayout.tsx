@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu, Button, Typography, Space, Avatar, Dropdown } from 'antd';
+import { Layout, Menu, Button, Typography, Space, Avatar, Dropdown, Drawer, Divider } from 'antd';
 import {
   ScheduleOutlined,
   FileTextOutlined,
@@ -10,6 +10,7 @@ import {
   UserOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  MenuOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useAuth } from '../../hooks/useAuth';
@@ -47,6 +48,7 @@ const AppLayout: React.FC = () => {
   const location = useLocation();
   const isMobile = useIsMobile();
   const [collapsed, setCollapsed] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const currentKey = '/' + location.pathname.split('/')[1];
 
@@ -91,13 +93,53 @@ const AppLayout: React.FC = () => {
             height: 56,
           }}
         >
-          <Text strong style={{ fontSize: 16 }}>
-            Домашние задания
-          </Text>
+          <Space align="center">
+            <Button
+              type="text"
+              icon={<MenuOutlined />}
+              onClick={() => setDrawerOpen(true)}
+              style={{ fontSize: 18 }}
+            />
+            <Text strong style={{ fontSize: 16 }}>
+              Домашние задания
+            </Text>
+          </Space>
           <Dropdown menu={{ items: userMenuItems }} trigger={['click']} placement="bottomRight">
             <Avatar size="small" icon={<UserOutlined />} style={{ cursor: 'pointer' }} />
           </Dropdown>
         </Header>
+
+        <Drawer
+          placement="left"
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          width={260}
+          title="Навигация"
+          styles={{ body: { padding: 0 } }}
+        >
+          <Menu
+            mode="inline"
+            selectedKeys={[currentKey]}
+            items={menuItems}
+            onClick={({ key }) => {
+              navigate(key);
+              setDrawerOpen(false);
+            }}
+            style={{ borderInlineEnd: 'none' }}
+          />
+          <Divider />
+          <div style={{ padding: '0 24px' }}>
+            <div style={{ color: '#8c8c8c', marginBottom: 8 }}>{user?.email}</div>
+            <Button
+              type="text"
+              danger
+              icon={<LogoutOutlined />}
+              onClick={handleSignOut}
+            >
+              Выйти
+            </Button>
+          </div>
+        </Drawer>
 
         <Content style={{ padding: 12, flex: 1 }}>
           <div className="mobile-content-padding">

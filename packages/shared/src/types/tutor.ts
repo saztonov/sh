@@ -11,6 +11,7 @@ export interface TutorSession {
   subject: string;
   day_of_week: number;
   time_start: string;
+  duration_hours: number;
   is_recurring: boolean;
   specific_date: string | null;
   effective_from: string | null;
@@ -36,6 +37,7 @@ export interface TutorSessionResolved {
   date: string;
   day_of_week: number;
   time_start: string;
+  duration_hours: number;
   is_recurring: boolean;
   is_exception: boolean;
 }

@@ -1,22 +1,25 @@
 import React, { useState, useMemo } from 'react';
-import { Modal, Select, Checkbox, DatePicker, Form } from 'antd';
+import { Modal, Select, Checkbox, DatePicker, Form, Alert } from 'antd';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import { SUBJECTS, DAY_NAMES } from '@homework/shared';
-import type { Tutor } from '@homework/shared';
+import type { Tutor, TutorSessionResolved } from '@homework/shared';
 import TimeInput from '../common/TimeInput';
+import { checkSessionConflicts } from '../../lib/conflicts';
 
 dayjs.extend(isoWeek);
 
 interface Props {
   open: boolean;
   tutors: Tutor[];
+  allSessions: TutorSessionResolved[];
   onCancel: () => void;
   onOk: (values: {
     tutor_id: string;
     subject: string;
     day_of_week: number;
     time_start: string;
+    duration_hours: number;
     is_recurring: boolean;
     specific_date?: string;
     effective_from?: string;
@@ -26,11 +29,18 @@ interface Props {
 
 const allSubjectOptions = SUBJECTS.map((s) => ({ label: s, value: s }));
 
-const TutorSessionModal: React.FC<Props> = ({ open, tutors, onCancel, onOk, loading }) => {
+const DURATION_OPTIONS = [
+  { label: '1 час', value: 1 },
+  { label: '1.5 часа', value: 1.5 },
+  { label: '2 часа', value: 2 },
+];
+
+const TutorSessionModal: React.FC<Props> = ({ open, tutors, allSessions, onCancel, onOk, loading }) => {
   const [tutorId, setTutorId] = useState<string | null>(null);
   const [subject, setSubject] = useState<string | null>(null);
   const [date, setDate] = useState<dayjs.Dayjs | null>(null);
   const [timeStart, setTimeStart] = useState('');
+  const [durationHours, setDurationHours] = useState(1);
   const [isRecurring, setIsRecurring] = useState(true);
 
   const selectedTutor = useMemo(
@@ -60,11 +70,22 @@ const TutorSessionModal: React.FC<Props> = ({ open, tutors, onCancel, onOk, load
     setSubject(null);
     setDate(null);
     setTimeStart('');
+    setDurationHours(1);
     setIsRecurring(true);
   };
 
   const isTimeValid = /^\d{2}:\d{2}$/.test(timeStart);
   const isValid = !!tutorId && !!subject && !!date && isTimeValid;
+
+  const conflictWarnings = useMemo(() => {
+    if (!date || !isTimeValid) return [];
+    const dateStr = date.format('YYYY-MM-DD');
+    const sameDaySessions = allSessions.filter((s) => s.date === dateStr);
+    return checkSessionConflicts(
+      { time_start: timeStart, duration_hours: durationHours },
+      sameDaySessions,
+    );
+  }, [date, timeStart, durationHours, allSessions, isTimeValid]);
 
   const handleOk = () => {
     if (!tutorId || !subject || !date || !isTimeValid) return;
@@ -76,6 +97,7 @@ const TutorSessionModal: React.FC<Props> = ({ open, tutors, onCancel, onOk, load
       subject,
       day_of_week: dayOfWeek,
       time_start: timeStart,
+      duration_hours: durationHours,
       is_recurring: isRecurring,
     };
 
@@ -147,6 +169,30 @@ const TutorSessionModal: React.FC<Props> = ({ open, tutors, onCancel, onOk, load
         <Form.Item label="Время начала" required>
           <TimeInput value={timeStart} onChange={setTimeStart} />
         </Form.Item>
+
+        <Form.Item label="Длительность" required>
+          <Select
+            value={durationHours}
+            onChange={setDurationHours}
+            options={DURATION_OPTIONS}
+          />
+        </Form.Item>
+
+        {conflictWarnings.length > 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="Возможные конфликты"
+            description={
+              <ul style={{ margin: 0, paddingLeft: 16 }}>
+                {conflictWarnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            }
+          />
+        )}
 
         <Form.Item>
           <Checkbox checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)}>

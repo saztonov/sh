@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Button, Space, Typography, Spin, Alert, Card, Empty, Tag, message } from 'antd';
-import { LeftOutlined, RightOutlined, PlusOutlined, CalendarOutlined } from '@ant-design/icons';
+import { Button, Space, Typography, Spin, Alert, Card, Empty, Tag, message, Tooltip } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { Table } from 'antd';
 import dayjs from 'dayjs';
@@ -16,6 +16,7 @@ import {
 } from '../hooks/useTutors';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { formatWeekRange, getSubjectColor } from '../lib/format';
+import { findConflictingSessionKeys } from '../lib/conflicts';
 import TutorSessionModal from '../components/tutors/TutorSessionModal';
 import TutorSessionActions from '../components/tutors/TutorSessionActions';
 
@@ -28,66 +29,85 @@ interface RowData {
   sessions: Map<number, TutorSessionResolved[]>; // day_of_week -> sessions
 }
 
+function buildRows(sessions: TutorSessionResolved[] | undefined): RowData[] {
+  if (!sessions) return [];
+
+  const groupMap = new Map<string, RowData>();
+
+  for (const s of sessions) {
+    const key = `${s.tutor_id}:${s.subject}`;
+    let row = groupMap.get(key);
+    if (!row) {
+      row = {
+        key,
+        tutor_name: s.tutor_name,
+        subject: s.subject,
+        sessions: new Map(),
+      };
+      groupMap.set(key, row);
+    }
+    const dayList = row.sessions.get(s.day_of_week) ?? [];
+    dayList.push(s);
+    row.sessions.set(s.day_of_week, dayList);
+  }
+
+  return Array.from(groupMap.values()).sort((a, b) =>
+    a.tutor_name.localeCompare(b.tutor_name, 'ru'),
+  );
+}
+
+function buildWeekDates(weekOffset: number) {
+  const monday = dayjs().isoWeekday(1).add(weekOffset, 'week');
+  return [1, 2, 3, 4, 5, 6, 7].map((dow) => ({
+    dow,
+    date: monday.isoWeekday(dow).format('DD.MM'),
+    isToday: monday.isoWeekday(dow).isSame(dayjs(), 'day'),
+  }));
+}
+
+function formatDuration(h: number): string {
+  if (h === 1) return '1ч';
+  if (h === 1.5) return '1.5ч';
+  return '2ч';
+}
+
 const TutorsPage: React.FC = () => {
-  const [weekOffset, setWeekOffset] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const isMobile = useIsMobile();
   const [messageApi, contextHolder] = message.useMessage();
 
   const { data: tutors = [] } = useTutors();
-  const { data: sessions, isLoading, error } = useTutorSessions(weekOffset);
+  const { data: sessionsWeek0, isLoading: loading0, error: error0 } = useTutorSessions(0);
+  const { data: sessionsWeek1, isLoading: loading1, error: error1 } = useTutorSessions(1);
   const createSession = useCreateTutorSession();
   const deleteSession = useDeleteTutorSession();
   const rescheduleOne = useRescheduleOne();
   const rescheduleFollowing = useRescheduleFollowing();
 
-  const goToPrevWeek = () => setWeekOffset((prev) => prev - 1);
-  const goToNextWeek = () => setWeekOffset((prev) => prev + 1);
-  const goToCurrentWeek = () => setWeekOffset(0);
+  const isLoading = loading0 || loading1;
+  const error = error0 || error1;
 
-  // Group sessions by tutor+subject for table rows
-  const rows = useMemo<RowData[]>(() => {
-    if (!sessions) return [];
+  const allSessions = useMemo(
+    () => [...(sessionsWeek0 ?? []), ...(sessionsWeek1 ?? [])],
+    [sessionsWeek0, sessionsWeek1],
+  );
 
-    const groupMap = new Map<string, RowData>();
+  const conflictKeys = useMemo(
+    () => findConflictingSessionKeys(allSessions),
+    [allSessions],
+  );
 
-    for (const s of sessions) {
-      const key = `${s.tutor_id}:${s.subject}`;
-      let row = groupMap.get(key);
-      if (!row) {
-        row = {
-          key,
-          tutor_name: s.tutor_name,
-          subject: s.subject,
-          sessions: new Map(),
-        };
-        groupMap.set(key, row);
-      }
-      const dayList = row.sessions.get(s.day_of_week) ?? [];
-      dayList.push(s);
-      row.sessions.set(s.day_of_week, dayList);
-    }
-
-    return Array.from(groupMap.values()).sort((a, b) =>
-      a.tutor_name.localeCompare(b.tutor_name, 'ru'),
-    );
-  }, [sessions]);
-
-  // Compute dates for column headers
-  const weekDates = useMemo(() => {
-    const monday = dayjs().isoWeekday(1).add(weekOffset, 'week');
-    return [1, 2, 3, 4, 5, 6, 7].map((dow) => ({
-      dow,
-      date: monday.isoWeekday(dow).format('DD.MM'),
-      isToday: monday.isoWeekday(dow).isSame(dayjs(), 'day'),
-    }));
-  }, [weekOffset]);
+  const rows0 = useMemo(() => buildRows(sessionsWeek0), [sessionsWeek0]);
+  const rows1 = useMemo(() => buildRows(sessionsWeek1), [sessionsWeek1]);
+  const weekDates0 = useMemo(() => buildWeekDates(0), []);
+  const weekDates1 = useMemo(() => buildWeekDates(1), []);
 
   const handleCreate = async (values: {
     tutor_id: string;
     subject: string;
     day_of_week: number;
     time_start: string;
+    duration_hours: number;
     is_recurring: boolean;
     specific_date?: string;
     effective_from?: string;
@@ -138,7 +158,9 @@ const TutorsPage: React.FC = () => {
     }
   };
 
-  const columns: ColumnsType<RowData> = [
+  const buildColumns = (
+    weekDates: { dow: number; date: string; isToday: boolean }[],
+  ): ColumnsType<RowData> => [
     {
       title: 'Репетитор',
       key: 'tutor',
@@ -160,7 +182,7 @@ const TutorsPage: React.FC = () => {
       title: (
         <div style={{ textAlign: 'center' as const }}>
           <div style={{ fontWeight: isToday ? 700 : 400, color: isToday ? '#1677ff' : undefined }}>
-            {DAY_NAMES_SHORT[dow] ?? dow}
+            {DAY_NAMES_SHORT[dow]}
           </div>
           <div style={{ fontSize: 11, color: isToday ? '#1677ff' : '#8c8c8c' }}>{date}</div>
         </div>
@@ -174,35 +196,89 @@ const TutorsPage: React.FC = () => {
 
         return (
           <Space direction="vertical" size={2}>
-            {daySessions.map((s) => (
-              <TutorSessionActions
-                key={`${s.session_id}-${s.date}`}
-                session={s}
-                onRescheduleOne={handleRescheduleOne}
-                onRescheduleFollowing={handleRescheduleFollowing}
-                onDelete={handleDelete}
-              >
-                <Button
-                  type="text"
-                  size="small"
-                  style={{
-                    fontWeight: 500,
-                    color: s.is_exception ? '#fa8c16' : '#1677ff',
-                    border: s.is_exception ? '1px dashed #fa8c16' : undefined,
-                    borderRadius: 6,
-                    padding: '2px 8px',
-                    height: 'auto',
-                  }}
+            {daySessions.map((s) => {
+              const conflictKey = `${s.session_id}:${s.date}`;
+              const conflictMsg = conflictKeys.get(conflictKey);
+              const hasConflict = !!conflictMsg;
+
+              const btn = (
+                <TutorSessionActions
+                  key={`${s.session_id}-${s.date}`}
+                  session={s}
+                  onRescheduleOne={handleRescheduleOne}
+                  onRescheduleFollowing={handleRescheduleFollowing}
+                  onDelete={handleDelete}
                 >
-                  {s.time_start}
-                </Button>
-              </TutorSessionActions>
-            ))}
+                  <Button
+                    type="text"
+                    size="small"
+                    style={{
+                      fontWeight: 500,
+                      color: hasConflict
+                        ? '#ff4d4f'
+                        : s.is_exception
+                          ? '#fa8c16'
+                          : '#1677ff',
+                      border: hasConflict
+                        ? '1px solid #ff4d4f'
+                        : s.is_exception
+                          ? '1px dashed #fa8c16'
+                          : undefined,
+                      borderRadius: 6,
+                      padding: '2px 8px',
+                      height: 'auto',
+                    }}
+                  >
+                    {s.time_start}
+                    <span style={{ fontSize: 10, marginLeft: 2, opacity: 0.7 }}>
+                      {formatDuration(s.duration_hours)}
+                    </span>
+                  </Button>
+                </TutorSessionActions>
+              );
+
+              if (hasConflict) {
+                return (
+                  <Tooltip key={`${s.session_id}-${s.date}`} title={conflictMsg} color="#ff4d4f">
+                    {btn}
+                  </Tooltip>
+                );
+              }
+              return btn;
+            })}
           </Space>
         );
       },
     })),
   ];
+
+  const renderWeekTable = (
+    label: string,
+    weekOffset: number,
+    rows: RowData[],
+    weekDates: { dow: number; date: string; isToday: boolean }[],
+  ) => (
+    <Card style={{ borderRadius: 12, marginBottom: 16 }} key={weekOffset}>
+      <Text strong style={{ display: 'block', marginBottom: 12, fontSize: 15 }}>
+        {label} ({formatWeekRange(weekOffset)})
+      </Text>
+      {rows.length === 0 ? (
+        <Empty
+          description="Нет занятий на эту неделю"
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+        />
+      ) : (
+        <Table<RowData>
+          columns={buildColumns(weekDates)}
+          dataSource={rows}
+          pagination={false}
+          size={isMobile ? 'small' : 'middle'}
+          scroll={isMobile ? { x: 620 } : undefined}
+          bordered
+        />
+      )}
+    </Card>
+  );
 
   return (
     <div>
@@ -221,37 +297,14 @@ const TutorsPage: React.FC = () => {
           Репетиторы
         </Title>
 
-        <Space wrap>
-          <Space size="small">
-            <Button icon={<LeftOutlined />} onClick={goToPrevWeek} size={isMobile ? 'small' : 'middle'} />
-            <Text
-              strong
-              style={{ minWidth: isMobile ? 140 : 200, textAlign: 'center', display: 'inline-block' }}
-            >
-              {formatWeekRange(weekOffset)}
-            </Text>
-            <Button icon={<RightOutlined />} onClick={goToNextWeek} size={isMobile ? 'small' : 'middle'} />
-          </Space>
-
-          {weekOffset !== 0 && (
-            <Button
-              icon={<CalendarOutlined />}
-              onClick={goToCurrentWeek}
-              size={isMobile ? 'small' : 'middle'}
-            >
-              Текущая
-            </Button>
-          )}
-
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setModalOpen(true)}
-            size={isMobile ? 'small' : 'middle'}
-          >
-            Добавить
-          </Button>
-        </Space>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => setModalOpen(true)}
+          size={isMobile ? 'small' : 'middle'}
+        >
+          Добавить
+        </Button>
       </div>
 
       {isLoading && (
@@ -270,32 +323,16 @@ const TutorsPage: React.FC = () => {
       )}
 
       {!isLoading && !error && (
-        <Card style={{ borderRadius: 12 }}>
-          {rows.length === 0 ? (
-            <Empty
-              description="Нет занятий на эту неделю"
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-            >
-              <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
-                Добавить занятие
-              </Button>
-            </Empty>
-          ) : (
-            <Table<RowData>
-              columns={columns}
-              dataSource={rows}
-              pagination={false}
-              size={isMobile ? 'small' : 'middle'}
-              scroll={isMobile ? { x: 620 } : undefined}
-              bordered
-            />
-          )}
-        </Card>
+        <>
+          {renderWeekTable('Текущая неделя', 0, rows0, weekDates0)}
+          {renderWeekTable('Следующая неделя', 1, rows1, weekDates1)}
+        </>
       )}
 
       <TutorSessionModal
         open={modalOpen}
         tutors={tutors}
+        allSessions={allSessions}
         onCancel={() => setModalOpen(false)}
         onOk={handleCreate}
         loading={createSession.isPending}

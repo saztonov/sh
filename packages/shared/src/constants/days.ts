@@ -4,6 +4,8 @@ export const DAY_NAMES: Record<number, string> = {
   3: 'Среда',
   4: 'Четверг',
   5: 'Пятница',
+  6: 'Суббота',
+  7: 'Воскресенье',
 };
 
 export const DAY_NAMES_SHORT: Record<number, string> = {
@@ -12,6 +14,8 @@ export const DAY_NAMES_SHORT: Record<number, string> = {
   3: 'Ср',
   4: 'Чт',
   5: 'Пт',
+  6: 'Сб',
+  7: 'Вс',
 };
 
 /** Russian day abbreviations used in Google Classroom due dates */

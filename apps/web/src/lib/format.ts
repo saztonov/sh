@@ -95,7 +95,7 @@ export function formatFileSize(bytes: number | null | undefined): string {
  */
 export function formatWeekRange(weekOffset: number): string {
   const monday = dayjs().isoWeekday(1).add(weekOffset, 'week');
-  const friday = monday.add(4, 'day');
+  const friday = monday.add(6, 'day');
 
   const monStr = monday.format('D MMM');
   const friStr = friday.format('D MMM YYYY');

@@ -30,6 +30,7 @@ const createSessionSchema = z.object({
   subject: z.string().min(1),
   day_of_week: z.number().int().min(1).max(7),
   time_start: z.string().regex(/^\d{2}:\d{2}$/),
+  duration_hours: z.number().refine((v) => [1, 1.5, 2].includes(v), { message: 'Must be 1, 1.5, or 2' }),
   is_recurring: z.boolean(),
   specific_date: z.string().nullable().optional(),
   effective_from: z.string().nullable().optional(),
@@ -255,6 +256,7 @@ const tutorRoutes: FastifyPluginAsync = async (fastify) => {
           date: sessionDate,
           day_of_week: session.day_of_week,
           time_start: session.time_start,
+          duration_hours: Number(session.duration_hours) || 1,
           is_recurring: true,
           is_exception: false,
         });
@@ -273,6 +275,7 @@ const tutorRoutes: FastifyPluginAsync = async (fastify) => {
             date: session.specific_date,
             day_of_week: session.day_of_week,
             time_start: session.time_start,
+            duration_hours: Number(session.duration_hours) || 1,
             is_recurring: false,
             is_exception: false,
           });
@@ -296,6 +299,7 @@ const tutorRoutes: FastifyPluginAsync = async (fastify) => {
         date: newDate,
         day_of_week: newDow,
         time_start: exception.new_time ?? session.time_start,
+        duration_hours: Number(session.duration_hours) || 1,
         is_recurring: session.is_recurring,
         is_exception: true,
       });
@@ -321,6 +325,7 @@ const tutorRoutes: FastifyPluginAsync = async (fastify) => {
       subject: parsed.data.subject,
       day_of_week: parsed.data.day_of_week,
       time_start: parsed.data.time_start,
+      duration_hours: parsed.data.duration_hours,
       is_recurring: parsed.data.is_recurring,
     };
 
@@ -433,6 +438,7 @@ const tutorRoutes: FastifyPluginAsync = async (fastify) => {
           subject: original.subject,
           day_of_week: parsed.data.new_day_of_week,
           time_start: parsed.data.new_time,
+          duration_hours: original.duration_hours ?? 1,
           is_recurring: true,
           effective_from: parsed.data.from_date,
         })

@@ -4,6 +4,7 @@ import { Layout, Menu, Button, Typography, Space, Avatar, Dropdown } from 'antd'
 import {
   ScheduleOutlined,
   FileTextOutlined,
+  TeamOutlined,
   SettingOutlined,
   LogoutOutlined,
   UserOutlined,
@@ -27,6 +28,11 @@ const menuItems: MenuProps['items'] = [
     key: '/assignments',
     icon: <FileTextOutlined />,
     label: 'Задания',
+  },
+  {
+    key: '/tutors',
+    icon: <TeamOutlined />,
+    label: 'Репетиторы',
   },
   {
     key: '/settings',

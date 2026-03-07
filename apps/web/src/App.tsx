@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import SchedulePage from './pages/SchedulePage';
 import AssignmentsPage from './pages/AssignmentsPage';
 import SettingsPage from './pages/SettingsPage';
+import TutorsPage from './pages/TutorsPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 const App: React.FC = () => {
@@ -25,6 +26,7 @@ const App: React.FC = () => {
         <Route index element={<Navigate to="/schedule" replace />} />
         <Route path="schedule" element={<SchedulePage />} />
         <Route path="assignments" element={<AssignmentsPage />} />
+        <Route path="tutors" element={<TutorsPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 

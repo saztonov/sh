@@ -7,6 +7,7 @@ import scheduleRoutes from './routes/schedule.js';
 import courseRoutes from './routes/courses.js';
 import fileRoutes from './routes/files.js';
 import scraperRoutes from './routes/scraper.js';
+import tutorRoutes from './routes/tutors.js';
 
 async function main(): Promise<void> {
   const fastify = Fastify({
@@ -31,6 +32,7 @@ async function main(): Promise<void> {
   await fastify.register(courseRoutes, { prefix: '/api' });
   await fastify.register(fileRoutes, { prefix: '/api' });
   await fastify.register(scraperRoutes, { prefix: '/api' });
+  await fastify.register(tutorRoutes, { prefix: '/api' });
 
   // Graceful shutdown
   const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];

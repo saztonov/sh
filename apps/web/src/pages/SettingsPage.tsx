@@ -19,6 +19,9 @@ import {
   Divider,
   Drawer,
   Timeline,
+  Modal,
+  Input,
+  Popconfirm,
 } from 'antd';
 import {
   CheckCircleOutlined,
@@ -32,11 +35,21 @@ import {
   RobotOutlined,
   ThunderboltOutlined,
   FileSearchOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { SUBJECTS } from '@homework/shared';
-import type { Course, ScrapeRun, ScrapeLog } from '@homework/shared';
+import type { Course, Tutor, ScrapeRun, ScrapeLog } from '@homework/shared';
+import {
+  useTutors,
+  useCreateTutor,
+  useUpdateTutor,
+  useDeleteTutor,
+} from '../hooks/useTutors';
 import {
   useCourses,
   useUpdateCourse,
@@ -89,6 +102,11 @@ const SettingsPage: React.FC = () => {
               key: 'scraper',
               label: 'Сбор заданий',
               children: <ScraperTab isMobile={isMobile} messageApi={messageApi} />,
+            },
+            {
+              key: 'tutors',
+              label: 'Репетиторы',
+              children: <TutorsDirectoryTab isMobile={isMobile} messageApi={messageApi} />,
             },
           ]}
         />
@@ -832,6 +850,151 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
           />
         )}
       </Drawer>
+    </div>
+  );
+};
+
+// --- Tutors Directory Tab ---
+
+const TutorsDirectoryTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
+  const { data: tutors, isLoading, error } = useTutors();
+  const createTutor = useCreateTutor();
+  const updateTutor = useUpdateTutor();
+  const deleteTutor = useDeleteTutor();
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingTutor, setEditingTutor] = useState<Tutor | null>(null);
+  const [tutorName, setTutorName] = useState('');
+
+  const openCreate = () => {
+    setEditingTutor(null);
+    setTutorName('');
+    setModalOpen(true);
+  };
+
+  const openEdit = (tutor: Tutor) => {
+    setEditingTutor(tutor);
+    setTutorName(tutor.name);
+    setModalOpen(true);
+  };
+
+  const handleSave = async () => {
+    const name = tutorName.trim();
+    if (!name) return;
+
+    try {
+      if (editingTutor) {
+        await updateTutor.mutateAsync({ id: editingTutor.id, name });
+        messageApi.success('Репетитор обновлён');
+      } else {
+        await createTutor.mutateAsync(name);
+        messageApi.success('Репетитор добавлен');
+      }
+      setModalOpen(false);
+    } catch {
+      messageApi.error('Не удалось сохранить');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteTutor.mutateAsync(id);
+      messageApi.success('Репетитор удалён');
+    } catch {
+      messageApi.error('Не удалось удалить');
+    }
+  };
+
+  const columns: ColumnsType<Tutor> = [
+    {
+      title: 'Имя',
+      dataIndex: 'name',
+      key: 'name',
+    },
+    {
+      title: 'Действия',
+      key: 'actions',
+      width: 120,
+      align: 'center',
+      render: (_: unknown, record: Tutor) => (
+        <Space size="small">
+          <Button
+            type="text"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => openEdit(record)}
+          />
+          <Popconfirm
+            title="Удалить репетитора?"
+            description="Все занятия с этим репетитором будут удалены"
+            onConfirm={() => handleDelete(record.id)}
+            okText="Удалить"
+            cancelText="Отмена"
+          >
+            <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+        <Spin size="large" tip="Загрузка..." />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert
+        message="Ошибка загрузки репетиторов"
+        description={error instanceof Error ? error.message : 'Неизвестная ошибка'}
+        type="error"
+        showIcon
+      />
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Text type="secondary">
+          Справочник репетиторов для использования на странице расписания занятий.
+        </Text>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          Добавить
+        </Button>
+      </div>
+
+      <Table<Tutor>
+        columns={columns}
+        dataSource={tutors ?? []}
+        rowKey="id"
+        pagination={false}
+        size={isMobile ? 'small' : 'middle'}
+        locale={{ emptyText: <Empty description="Нет репетиторов" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }}
+      />
+
+      <Modal
+        title={editingTutor ? 'Редактировать репетитора' : 'Добавить репетитора'}
+        open={modalOpen}
+        onOk={handleSave}
+        onCancel={() => setModalOpen(false)}
+        okText="Сохранить"
+        cancelText="Отмена"
+        confirmLoading={createTutor.isPending || updateTutor.isPending}
+      >
+        <Input
+          placeholder="Имя репетитора"
+          value={tutorName}
+          onChange={(e) => setTutorName(e.target.value)}
+          onPressEnter={handleSave}
+          autoFocus
+          style={{ marginTop: 8 }}
+        />
+      </Modal>
     </div>
   );
 };

@@ -26,6 +26,13 @@ export type {
   TelegramUser,
 } from './types/course.js';
 
+export type {
+  Tutor,
+  TutorSession,
+  TutorSessionException,
+  TutorSessionResolved,
+} from './types/tutor.js';
+
 // Constants
 export { DEFAULT_COURSE_MAP, SUBJECTS } from './constants/course-map.js';
 export type { SubjectName } from './constants/course-map.js';

@@ -20,7 +20,8 @@
       "Bash(npm run build -w packages/shared)",
       "Bash(npm install @fastify/rate-limit @fastify/helmet --workspace=apps/api)",
       "Bash(npm install @fastify/rate-limit @fastify/helmet)",
-      "Bash(npm run build --workspace=apps/api)"
+      "Bash(npm run build --workspace=apps/api)",
+      "Bash(npm run build --workspace=packages/shared)"
     ]
   }
 }

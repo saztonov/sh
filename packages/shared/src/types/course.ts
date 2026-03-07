@@ -25,6 +25,14 @@ export interface ScrapeRun {
   assignments_new: number | null;
   error_message: string | null;
   source?: 'google' | 'eljur' | null;
+  google_status?: 'success' | 'error' | null;
+  google_found?: number | null;
+  google_new?: number | null;
+  google_error?: string | null;
+  eljur_status?: 'success' | 'error' | null;
+  eljur_found?: number | null;
+  eljur_new?: number | null;
+  eljur_error?: string | null;
 }
 
 export type ScrapeLogLevel = 'info' | 'warn' | 'error' | 'debug';

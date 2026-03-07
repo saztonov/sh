@@ -182,6 +182,8 @@ async function handleScrapeAll(runId: string): Promise<void> {
     let googleNew = 0;
     let eljurFound = 0;
     let eljurNew = 0;
+    let googleError: string | null = null;
+    let eljurError: string | null = null;
     const errors: string[] = [];
 
     // Phase 1: Google Classroom
@@ -218,14 +220,17 @@ async function handleScrapeAll(runId: string): Promise<void> {
           } catch (retryErr) {
             const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
             log.error('finish', `Google Classroom ошибка после автологина: ${retryMsg}`);
+            googleError = retryMsg;
             errors.push(`Google: ${retryMsg}`);
           }
         } else {
           log.error('auto_login', `Автологин Google Classroom не удался: ${loginResult.error}`);
-          errors.push(`Google: автологин не удался — ${loginResult.error}`);
+          googleError = `автологин не удался — ${loginResult.error}`;
+          errors.push(`Google: ${googleError}`);
         }
       } else {
         log.error('finish', `Google Classroom ошибка: ${msg}`);
+        googleError = msg;
         errors.push(`Google: ${msg}`);
       }
     }
@@ -263,14 +268,17 @@ async function handleScrapeAll(runId: string): Promise<void> {
           } catch (retryErr) {
             const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
             log.error('finish', `Eljur ошибка после автологина: ${retryMsg}`);
+            eljurError = retryMsg;
             errors.push(`Eljur: ${retryMsg}`);
           }
         } else {
           log.error('auto_login', `Автологин Eljur не удался: ${loginResult.error}`);
-          errors.push(`Eljur: автологин не удался — ${loginResult.error}`);
+          eljurError = `автологин не удался — ${loginResult.error}`;
+          errors.push(`Eljur: ${eljurError}`);
         }
       } else {
         log.error('finish', `Eljur ошибка: ${msg}`);
+        eljurError = msg;
         errors.push(`Eljur: ${msg}`);
       }
     }
@@ -288,6 +296,14 @@ async function handleScrapeAll(runId: string): Promise<void> {
         assignments_found: totalFound,
         assignments_new: totalNew,
         error_message: errors.length > 0 ? errors.join('; ') : null,
+        google_status: googleError ? 'error' : 'success',
+        google_found: googleFound,
+        google_new: googleNew,
+        google_error: googleError,
+        eljur_status: eljurError ? 'error' : 'success',
+        eljur_found: eljurFound,
+        eljur_new: eljurNew,
+        eljur_error: eljurError,
       })
       .eq('id', runId);
 
@@ -310,11 +326,26 @@ export function setupCronSchedule(): cron.ScheduledTask {
 
   logger.info({ cron: cronExpression }, 'Setting up scrape cron schedule');
 
-  const task = cron.schedule(cronExpression, () => {
-    logger.info('Cron triggered scrape');
-    guardedScrape().catch((err) => {
-      logger.error({ err }, 'Cron scrape failed');
-    });
+  const task = cron.schedule(cronExpression, async () => {
+    if (isRunning) {
+      logger.warn('Scrape already in progress, skipping cron trigger');
+      return;
+    }
+    logger.info('Cron triggered scrape_all');
+    try {
+      const { data, error } = await supabase
+        .from('scrape_runs')
+        .insert({ status: 'scrape_all' })
+        .select('id')
+        .single();
+      if (error) {
+        logger.error({ error }, 'Failed to create scrape_all run from cron');
+      } else {
+        logger.info({ runId: data.id }, 'Created scrape_all run from cron, poller will pick it up');
+      }
+    } catch (err) {
+      logger.error({ err }, 'Cron scrape_all trigger failed');
+    }
   });
 
   return task;

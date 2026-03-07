@@ -402,6 +402,32 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
 
     return { data: (data ?? []) as ScrapeLog[] };
   });
+
+  /**
+   * GET /scraper/scrape-logs - paginated scrape_runs history
+   */
+  fastify.get<{ Querystring: { page?: string; pageSize?: string } }>(
+    '/scraper/scrape-logs',
+    async (request, reply) => {
+      const page = Math.max(1, parseInt(request.query.page ?? '1', 10) || 1);
+      const pageSize = Math.min(100, Math.max(1, parseInt(request.query.pageSize ?? '20', 10) || 20));
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, error, count } = await supabase
+        .from('scrape_runs')
+        .select('*', { count: 'exact' })
+        .order('started_at', { ascending: false })
+        .range(from, to);
+
+      if (error) {
+        request.log.error(error, 'Failed to fetch scrape logs page');
+        return reply.code(500).send({ error: 'Failed to fetch scrape logs' });
+      }
+
+      return { data: (data ?? []) as ScrapeRun[], total: count ?? 0 };
+    },
+  );
 };
 
 export default scraperRoutes;

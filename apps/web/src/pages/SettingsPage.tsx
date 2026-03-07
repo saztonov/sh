@@ -39,6 +39,7 @@ import {
   DeleteOutlined,
   PlusOutlined,
   TeamOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
@@ -70,6 +71,7 @@ import {
   useEljurAutoLoginAvailable,
   useTriggerEljurScrape,
   useScrapeRunLogs,
+  useScrapeLogsPage,
 } from '../hooks/useCourses';
 import { useIsMobile } from '../hooks/useMediaQuery';
 import { useProfile } from '../hooks/useProfile';
@@ -97,6 +99,11 @@ const SettingsPage: React.FC = () => {
       key: 'scraper',
       label: 'Сбор заданий',
       children: <ScraperTab isMobile={isMobile} messageApi={messageApi} />,
+    },
+    {
+      key: 'scrape-logs',
+      label: 'Журнал сбора',
+      children: <ScrapeLogsTab isMobile={isMobile} messageApi={messageApi} />,
     },
     {
       key: 'tutors',
@@ -829,6 +836,194 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
       )}
 
       {/* Logs Drawer */}
+      <Drawer
+        title="Логи запуска"
+        open={!!logsRunId}
+        onClose={() => setLogsRunId(null)}
+        width={isMobile ? '100%' : 520}
+      >
+        {logsLoading ? (
+          <Spin tip="Загрузка логов..." />
+        ) : !logsData || logsData.length === 0 ? (
+          <Empty description="Логи не найдены" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        ) : (
+          <Timeline
+            items={logsData.map((log: ScrapeLog) => ({
+              color:
+                log.level === 'error'
+                  ? 'red'
+                  : log.level === 'warn'
+                    ? 'orange'
+                    : 'blue',
+              children: (
+                <div>
+                  <Text strong>{log.step ? `[${log.step}] ` : ''}</Text>
+                  <Text>{log.message}</Text>
+                  <br />
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {dayjs(log.created_at).format('HH:mm:ss')}
+                    {log.duration_ms != null && ` · ${log.duration_ms}мс`}
+                  </Text>
+                  {log.details && (
+                    <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
+                      {Object.entries(log.details).map(([k, v]) => (
+                        <span key={k} style={{ marginRight: 8 }}>
+                          {k}: {String(v)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ),
+            }))}
+          />
+        )}
+      </Drawer>
+    </div>
+  );
+};
+
+// --- Scrape Logs Tab ---
+
+const getSourceTag = (status: string | null | undefined) => {
+  if (status === 'success') return <Tag color="success" icon={<CheckCircleOutlined />}>OK</Tag>;
+  if (status === 'error') return <Tag color="error" icon={<CloseCircleOutlined />}>Ошибка</Tag>;
+  return <Tag color="default">—</Tag>;
+};
+
+const ScrapeLogsTab: React.FC<TabProps> = ({ isMobile }) => {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const { data: result, isLoading, error } = useScrapeLogsPage(page, pageSize);
+
+  const [logsRunId, setLogsRunId] = useState<string | null>(null);
+  const { data: logsData, isLoading: logsLoading } = useScrapeRunLogs(logsRunId);
+
+  const getOverallTag = (status: ScrapeRun['status']) => {
+    switch (status) {
+      case 'success':
+        return <Tag color="success" icon={<CheckCircleOutlined />}>Успешно</Tag>;
+      case 'error':
+        return <Tag color="error" icon={<CloseCircleOutlined />}>Ошибка</Tag>;
+      case 'running':
+        return <Tag color="processing" icon={<LoadingOutlined spin />}>Выполняется</Tag>;
+      case 'pending':
+      case 'scrape_all':
+        return <Tag color="default" icon={<ClockCircleOutlined />}>Ожидание</Tag>;
+      default:
+        return <Tag>{status}</Tag>;
+    }
+  };
+
+  const columns: ColumnsType<ScrapeRun> = [
+    {
+      title: 'Время',
+      dataIndex: 'started_at',
+      key: 'started_at',
+      width: isMobile ? 110 : 150,
+      render: (val: string) => dayjs(val).format('DD.MM.YYYY HH:mm'),
+    },
+    {
+      title: 'Google Classroom',
+      key: 'google',
+      width: isMobile ? 130 : 180,
+      render: (_: unknown, record: ScrapeRun) => (
+        <Space size={4} direction={isMobile ? 'vertical' : 'horizontal'}>
+          {getSourceTag(record.google_status)}
+          {record.google_found != null && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {record.google_found}/{record.google_new ?? 0}
+            </Text>
+          )}
+        </Space>
+      ),
+    },
+    {
+      title: 'Eljur',
+      key: 'eljur',
+      width: isMobile ? 110 : 160,
+      render: (_: unknown, record: ScrapeRun) => (
+        <Space size={4} direction={isMobile ? 'vertical' : 'horizontal'}>
+          {getSourceTag(record.eljur_status)}
+          {record.eljur_found != null && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {record.eljur_found}/{record.eljur_new ?? 0}
+            </Text>
+          )}
+        </Space>
+      ),
+    },
+    {
+      title: 'Результат',
+      dataIndex: 'status',
+      key: 'status',
+      width: isMobile ? 100 : 130,
+      render: (status: ScrapeRun['status']) => getOverallTag(status),
+    },
+    {
+      title: 'Ошибки',
+      dataIndex: 'error_message',
+      key: 'error_message',
+      ellipsis: true,
+      render: (val: string | null) =>
+        val ? (
+          <Tooltip title={val}>
+            <Text type="danger" ellipsis>{val}</Text>
+          </Tooltip>
+        ) : '—',
+    },
+    {
+      title: 'Лог',
+      key: 'logs',
+      width: 60,
+      align: 'center',
+      render: (_: unknown, record: ScrapeRun) => (
+        <Tooltip title="Посмотреть логи">
+          <Button
+            type="text"
+            size="small"
+            icon={<FileSearchOutlined />}
+            onClick={() => setLogsRunId(record.id)}
+          />
+        </Tooltip>
+      ),
+    },
+  ];
+
+  if (error) {
+    return (
+      <Alert
+        message="Ошибка загрузки журнала"
+        description={error instanceof Error ? error.message : 'Неизвестная ошибка'}
+        type="error"
+        showIcon
+      />
+    );
+  }
+
+  return (
+    <div>
+      <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+        Автоматический сбор выполняется каждый час с 10:00 до 22:00. Числа в колонках источников: найдено / новых.
+      </Text>
+
+      <Table<ScrapeRun>
+        columns={columns}
+        dataSource={result?.data ?? []}
+        rowKey="id"
+        loading={isLoading}
+        pagination={{
+          current: page,
+          pageSize,
+          total: result?.total ?? 0,
+          showSizeChanger: true,
+          pageSizeOptions: [10, 20, 50],
+          onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+        }}
+        size={isMobile ? 'small' : 'middle'}
+        scroll={isMobile ? { x: 600 } : undefined}
+      />
+
       <Drawer
         title="Логи запуска"
         open={!!logsRunId}

@@ -219,6 +219,11 @@ interface ScrapeLogsResponse {
   data: ScrapeLog[];
 }
 
+interface ScrapeLogsPageResponse {
+  data: ScrapeRun[];
+  total: number;
+}
+
 /**
  * Fetch logs for a specific scrape run.
  */
@@ -232,6 +237,22 @@ export function useScrapeRunLogs(runId: string | null) {
     },
     enabled: !!runId,
     staleTime: 10 * 1000,
+  });
+}
+
+/**
+ * Fetch paginated scrape runs for the logs tab.
+ */
+export function useScrapeLogsPage(page: number, pageSize: number) {
+  return useQuery<{ data: ScrapeRun[]; total: number }>({
+    queryKey: ['scrape-logs-page', page, pageSize],
+    queryFn: async () => {
+      const { data } = await api.get<ScrapeLogsPageResponse>(
+        `/api/scraper/scrape-logs?page=${page}&pageSize=${pageSize}`,
+      );
+      return { data: data.data, total: data.total };
+    },
+    staleTime: 30 * 1000,
   });
 }
 

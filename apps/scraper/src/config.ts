@@ -31,7 +31,7 @@ export const config = {
     publicUrl: optionalEnv('S3_PUBLIC_URL', ''),
   },
   scrape: {
-    cron: optionalEnv('SCRAPE_CRON', '0 7,14,20 * * 1-5'),
+    cron: optionalEnv('SCRAPE_CRON', '0 10-22 * * *'),
     pollIntervalMs: 30_000,
   },
   playwright: {

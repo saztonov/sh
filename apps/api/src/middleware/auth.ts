@@ -1,6 +1,8 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { createClient } from '@supabase/supabase-js';
 import { config } from '../config.js';
+import { supabase } from '../db.js';
+import type { UserRole } from '@homework/shared';
 
 /** Supabase client used solely for token verification. */
 const authClient = createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY, {
@@ -13,6 +15,7 @@ const authClient = createClient(config.SUPABASE_URL, config.SUPABASE_ANON_KEY, {
 export interface AuthUser {
   id: string;
   email?: string;
+  role: UserRole;
 }
 
 declare module 'fastify' {
@@ -47,8 +50,16 @@ export async function authMiddleware(
     return reply.code(401).send({ error: 'Invalid or expired token' });
   }
 
+  // Fetch role from user_profiles (service client bypasses RLS)
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
   request.user = {
     id: user.id,
     email: user.email,
+    role: (profile?.role as UserRole) ?? 'user',
   };
 }

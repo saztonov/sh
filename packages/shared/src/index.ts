@@ -33,6 +33,9 @@ export type {
   TutorSessionResolved,
 } from './types/tutor.js';
 
+export type { UserProfile, UserRole } from './types/user.js';
+export { BANNED_PASSWORDS } from './types/user.js';
+
 // Constants
 export { DEFAULT_COURSE_MAP, SUBJECTS } from './constants/course-map.js';
 export type { SubjectName } from './constants/course-map.js';

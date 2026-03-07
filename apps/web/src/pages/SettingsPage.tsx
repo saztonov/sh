@@ -72,6 +72,8 @@ import {
   useScrapeRunLogs,
 } from '../hooks/useCourses';
 import { useIsMobile } from '../hooks/useMediaQuery';
+import { useProfile } from '../hooks/useProfile';
+import UsersTab from '../components/settings/UsersTab';
 
 const { Title, Text } = Typography;
 
@@ -83,6 +85,40 @@ const subjectOptions = [
 const SettingsPage: React.FC = () => {
   const isMobile = useIsMobile();
   const [messageApi, contextHolder] = message.useMessage();
+  const { data: profile } = useProfile();
+
+  const tabItems = [
+    {
+      key: 'courses',
+      label: 'Соответствие предметов',
+      children: <CourseMappingTab isMobile={isMobile} messageApi={messageApi} />,
+    },
+    {
+      key: 'scraper',
+      label: 'Сбор заданий',
+      children: <ScraperTab isMobile={isMobile} messageApi={messageApi} />,
+    },
+    {
+      key: 'tutors',
+      label: 'Репетиторы',
+      children: <TutorsDirectoryTab isMobile={isMobile} messageApi={messageApi} />,
+    },
+    ...(profile?.role === 'admin'
+      ? [
+          {
+            key: 'users',
+            label: 'Пользователи',
+            children: (
+              <UsersTab
+                isMobile={isMobile}
+                messageApi={messageApi}
+                currentUserId={profile.id}
+              />
+            ),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div>
@@ -94,23 +130,7 @@ const SettingsPage: React.FC = () => {
       <Card style={{ borderRadius: 12 }}>
         <Tabs
           defaultActiveKey="courses"
-          items={[
-            {
-              key: 'courses',
-              label: 'Соответствие предметов',
-              children: <CourseMappingTab isMobile={isMobile} messageApi={messageApi} />,
-            },
-            {
-              key: 'scraper',
-              label: 'Сбор заданий',
-              children: <ScraperTab isMobile={isMobile} messageApi={messageApi} />,
-            },
-            {
-              key: 'tutors',
-              label: 'Репетиторы',
-              children: <TutorsDirectoryTab isMobile={isMobile} messageApi={messageApi} />,
-            },
-          ]}
+          items={tabItems}
         />
       </Card>
     </div>

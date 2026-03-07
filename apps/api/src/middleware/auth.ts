@@ -57,9 +57,13 @@ export async function authMiddleware(
     .eq('id', user.id)
     .single();
 
+  if (!profile) {
+    return reply.code(403).send({ error: 'User profile not found' });
+  }
+
   request.user = {
     id: user.id,
     email: user.email,
-    role: (profile?.role as UserRole) ?? 'user',
+    role: profile.role as UserRole,
   };
 }

@@ -1,5 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
 import { config } from './config.js';
 import healthRoutes from './routes/health.js';
 import assignmentRoutes from './routes/assignments.js';
@@ -16,6 +18,17 @@ async function main(): Promise<void> {
     logger: {
       level: 'info',
     },
+  });
+
+  // Security headers
+  await fastify.register(helmet, {
+    contentSecurityPolicy: false,
+  });
+
+  // Rate limiting
+  await fastify.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
   });
 
   // Register CORS

@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { supabase } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { adminMiddleware } from '../middleware/admin.js';
 import type { ScrapeRun, ScrapeLog } from '@homework/shared';
 
 const scraperRoutes: FastifyPluginAsync = async (fastify) => {
@@ -16,6 +17,11 @@ const scraperRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   fastify.addHook('preHandler', authMiddleware);
+  fastify.addHook('preHandler', async (request, reply) => {
+    if (request.method === 'POST') {
+      await adminMiddleware(request, reply);
+    }
+  });
 
   // ─── Google Classroom endpoints ───
 

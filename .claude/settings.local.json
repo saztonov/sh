@@ -17,7 +17,10 @@
       "Bash(npm run build --workspace=apps/web)",
       "Bash(npx tsc --noEmit -p packages/shared/tsconfig.json)",
       "Bash(npx tsc --noEmit -p apps/web/tsconfig.app.json)",
-      "Bash(npm run build -w packages/shared)"
+      "Bash(npm run build -w packages/shared)",
+      "Bash(npm install @fastify/rate-limit @fastify/helmet --workspace=apps/api)",
+      "Bash(npm install @fastify/rate-limit @fastify/helmet)",
+      "Bash(npm run build --workspace=apps/api)"
     ]
   }
 }

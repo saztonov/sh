@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.50.0-noble AS builder
+FROM mcr.microsoft.com/playwright:v1.58.2-noble AS builder
 
 WORKDIR /app
 COPY package.json package-lock.json* ./
@@ -11,7 +11,7 @@ COPY packages/shared packages/shared
 COPY apps/scraper apps/scraper
 RUN npm run build -w packages/shared && npm run build -w apps/scraper
 
-FROM mcr.microsoft.com/playwright:v1.50.0-noble
+FROM mcr.microsoft.com/playwright:v1.58.2-noble
 WORKDIR /app
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/node_modules ./node_modules

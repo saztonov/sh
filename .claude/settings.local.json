@@ -21,7 +21,9 @@
       "Bash(npm install @fastify/rate-limit @fastify/helmet --workspace=apps/api)",
       "Bash(npm install @fastify/rate-limit @fastify/helmet)",
       "Bash(npm run build --workspace=apps/api)",
-      "Bash(npm run build --workspace=packages/shared)"
+      "Bash(npm run build --workspace=packages/shared)",
+      "Bash(npm install --workspace=apps/scraper)",
+      "Bash(npm install)"
     ]
   }
 }

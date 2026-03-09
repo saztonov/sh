@@ -467,9 +467,12 @@ export async function captureSessionAuto(log?: ScrapeLogger): Promise<{ success:
       return { success: true };
     }
 
-    // Fallback: if URL is on classroom.google.com (not login page), save session anyway
+    // Fallback: autoLogin succeeded (URL was on classroom.google.com),
+    // so session cookies are valid even if DOM hasn't fully rendered
     const finalUrl = page.url();
-    if (isClassroomUrl(finalUrl) && !finalUrl.includes('accounts.google.com')) {
+    logger.info({ url: finalUrl }, 'Post-login URL (DOM check failed, checking URL fallback)');
+
+    if (finalUrl.includes('classroom.google.com') && !finalUrl.includes('accounts.google.com')) {
       logger.info({ url: finalUrl }, 'Classroom URL looks authenticated, saving session despite DOM check failure');
       await saveBrowserState(context);
       log?.info('session_save', 'Автологин Google: URL авторизован, сессия сохранена');
@@ -478,8 +481,9 @@ export async function captureSessionAuto(log?: ScrapeLogger): Promise<{ success:
       return { success: true };
     }
 
+    log?.error('auto_login', `Автологин Google: финальный URL не на Classroom: ${finalUrl}`);
     await closeBrowser(browser);
-    return { success: false, error: 'Автологин выполнен, но страница Classroom не загрузилась.' };
+    return { success: false, error: `Автологин выполнен, но финальный URL: ${finalUrl}` };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     logger.error({ err }, 'Auto-login session capture failed');

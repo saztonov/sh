@@ -65,3 +65,6 @@
 - `npm run dev:api|web|scraper|bot` — запуск отдельного приложения
 - `npm run build` — сборка всех приложений
 - `npm run seed` — заполнение расписания из Excel-файла
+
+## Архитектура развертывания на VPS
+docs\deployment.md

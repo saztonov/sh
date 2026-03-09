@@ -175,7 +175,7 @@ export async function captureSession(log?: ScrapeLogger): Promise<{ success: boo
   try {
     log?.info('browser_launch', 'Запуск браузера для захвата сессии Google');
     // Always launch visible (headless=false) for session capture
-    const launched = await launchBrowser(false);
+    const launched = await launchBrowser();
     browser = launched.browser;
     const { context } = launched;
     const page = await context.newPage();
@@ -414,7 +414,7 @@ export async function captureSessionAuto(log?: ScrapeLogger): Promise<{ success:
   let browser: Browser | undefined;
 
   try {
-    const launched = await launchBrowser(false);
+    const launched = await launchBrowser(true);
     browser = launched.browser;
     const { context } = launched;
     const page = await context.newPage();

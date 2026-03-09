@@ -271,7 +271,7 @@ export async function captureEljurSession(log?: ScrapeLogger): Promise<{ success
 
   try {
     log?.info('browser_launch', 'Запуск браузера для захвата сессии Eljur');
-    const launched = await launchBrowser(false, eljurStatePath);
+    const launched = await launchBrowser(undefined, eljurStatePath);
     browser = launched.browser;
     const { context } = launched;
     const page = await context.newPage();
@@ -414,7 +414,7 @@ export async function captureEljurSessionAuto(log?: ScrapeLogger): Promise<{ suc
   let browser: Browser | undefined;
 
   try {
-    const launched = await launchBrowser(false, eljurStatePath);
+    const launched = await launchBrowser(true, eljurStatePath);
     browser = launched.browser;
     const { context } = launched;
     const page = await context.newPage();

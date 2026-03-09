@@ -147,7 +147,7 @@ const AppLayout: React.FC = () => {
           </div>
         </Drawer>
 
-        <Content style={{ padding: 12, flex: 1 }}>
+        <Content style={{ padding: 12, flex: 1, overflowX: 'hidden' }}>
           <div className="mobile-content-padding">
             <Outlet />
           </div>

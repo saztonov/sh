@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { Button, Space, Typography, Spin, Alert, Card, Empty, Checkbox, Progress } from 'antd';
+import { Button, Typography, Spin, Alert, Card, Empty, Checkbox, Progress } from 'antd';
 import { LeftOutlined, RightOutlined, CalendarOutlined, DownOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { MergedScheduleDay } from '@homework/shared';
@@ -240,22 +240,22 @@ const SchedulePage: React.FC = () => {
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: isMobile ? 'stretch' : 'center',
             justifyContent: 'space-between',
-            flexWrap: 'wrap',
             gap: 8,
           }}
         >
-          <Space>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
             <Button
               icon={<LeftOutlined />}
               onClick={goToPrevWeek}
               size="middle"
             />
-            <div style={{ textAlign: 'center', minWidth: isMobile ? 140 : 200 }}>
+            <div style={{ textAlign: 'center', minWidth: 0, flex: 1 }}>
               <Title
                 level={5}
-                style={{ margin: 0, whiteSpace: 'nowrap' }}
+                style={{ margin: 0, whiteSpace: 'nowrap', fontSize: isMobile ? 14 : undefined }}
               >
                 <CalendarOutlined style={{ marginRight: 8 }} />
                 {formatWeekRange(weekOffset)}
@@ -266,9 +266,9 @@ const SchedulePage: React.FC = () => {
               onClick={goToNextWeek}
               size="middle"
             />
-          </Space>
+          </div>
 
-          <Space wrap size={12}>
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: isMobile ? 8 : 12 }}>
             {weekOffset !== 0 && (
               <Button type="link" onClick={goToCurrentWeek} style={{ padding: 0 }}>
                 Текущая неделя
@@ -289,7 +289,7 @@ const SchedulePage: React.FC = () => {
                 {allExpanded ? 'Свернуть все' : 'Развернуть все'}
               </Button>
             )}
-          </Space>
+          </div>
         </div>
 
         {/* Week summary */}

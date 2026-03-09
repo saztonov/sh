@@ -56,7 +56,7 @@ const ScheduleDayCard: React.FC<ScheduleDayCardProps> = ({ slots, onAssignmentCl
           >
             {/* Left: lesson info */}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                 <Text
                   strong
                   style={{
@@ -75,7 +75,7 @@ const ScheduleDayCard: React.FC<ScheduleDayCardProps> = ({ slots, onAssignmentCl
                 </Text>
                 <Tag
                   color={getSubjectColor(slot.subject)}
-                  style={{ borderRadius: 4, fontWeight: 500, margin: 0 }}
+                  style={{ borderRadius: 4, fontWeight: 500, margin: 0, maxWidth: 'calc(100% - 120px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                 >
                   {slot.subject}
                 </Tag>
@@ -96,46 +96,49 @@ const ScheduleDayCard: React.FC<ScheduleDayCardProps> = ({ slots, onAssignmentCl
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'space-between',
                           gap: 8,
+                          minWidth: 0,
                         }}
                       >
-                        <Tag
-                          className="assignment-tag"
-                          color={getAssignmentTagColor(a)}
-                          icon={a.isCompleted ? <CheckCircleOutlined /> : undefined}
-                          onClick={() => onAssignmentClick(a.id)}
-                          style={{
-                            cursor: 'pointer',
-                            maxWidth: '60%',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            borderRadius: 4,
-                            margin: 0,
-                            textDecoration: a.isCompleted ? 'line-through' : 'none',
-                            opacity: a.isCompleted ? 0.7 : 1,
-                          }}
-                        >
-                          {a.title}
-                        </Tag>
-                        {getSourceLabel(a.source) && (
+                        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
                           <Tag
-                            color={a.source === 'eljur' ? 'purple' : 'blue'}
-                            style={{ borderRadius: 2, margin: 0, fontSize: 10, lineHeight: '16px', padding: '0 4px' }}
+                            className="assignment-tag"
+                            color={getAssignmentTagColor(a)}
+                            icon={a.isCompleted ? <CheckCircleOutlined /> : undefined}
+                            onClick={() => onAssignmentClick(a.id)}
+                            style={{
+                              cursor: 'pointer',
+                              maxWidth: '100%',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              borderRadius: 4,
+                              margin: 0,
+                              textDecoration: a.isCompleted ? 'line-through' : 'none',
+                              opacity: a.isCompleted ? 0.7 : 1,
+                            }}
                           >
-                            {getSourceLabel(a.source)}
+                            {a.title}
                           </Tag>
-                        )}
-                        {!a.isCompleted && getDueDateStatus(a.dueDate) === 'overdue' && (
-                          <Text style={{ fontSize: 11, color: '#ff4d4f', whiteSpace: 'nowrap' }}>
-                            {getDueDateLabel(a.dueDate)}
-                          </Text>
-                        )}
+                          {getSourceLabel(a.source) && (
+                            <Tag
+                              color={a.source === 'eljur' ? 'purple' : 'blue'}
+                              style={{ borderRadius: 2, margin: 0, fontSize: 10, lineHeight: '16px', padding: '0 4px' }}
+                            >
+                              {getSourceLabel(a.source)}
+                            </Tag>
+                          )}
+                          {!a.isCompleted && getDueDateStatus(a.dueDate) === 'overdue' && (
+                            <Text style={{ fontSize: 11, color: '#ff4d4f', whiteSpace: 'nowrap' }}>
+                              {getDueDateLabel(a.dueDate)}
+                            </Text>
+                          )}
+                        </div>
                         <Switch
                           size="small"
                           checked={a.isCompleted}
                           onChange={() => handleToggle(a)}
+                          style={{ flexShrink: 0 }}
                           loading={
                             toggleCompleted.isPending &&
                             toggleCompleted.variables?.id === a.id

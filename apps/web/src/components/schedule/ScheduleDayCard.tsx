@@ -56,32 +56,34 @@ const ScheduleDayCard: React.FC<ScheduleDayCardProps> = ({ slots, onAssignmentCl
           >
             {/* Left: lesson info */}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-                <Text
-                  strong
-                  style={{
-                    fontSize: 14,
-                    width: 24,
-                    height: 24,
-                    borderRadius: '50%',
-                    background: '#f0f0f0',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  {slot.lessonNumber}
-                </Text>
-                <Tag
-                  color={getSubjectColor(slot.subject)}
-                  style={{ borderRadius: 4, fontWeight: 500, margin: 0, maxWidth: 'calc(100% - 120px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                >
-                  {slot.subject}
-                </Tag>
+              <div style={{ marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Text
+                    strong
+                    style={{
+                      fontSize: 14,
+                      width: 24,
+                      height: 24,
+                      borderRadius: '50%',
+                      background: '#f0f0f0',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {slot.lessonNumber}
+                  </Text>
+                  <Tag
+                    color={getSubjectColor(slot.subject)}
+                    style={{ borderRadius: 4, fontWeight: 500, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  >
+                    {slot.subject}
+                  </Tag>
+                </div>
                 {slot.timeStart && slot.timeEnd && (
-                  <Text type="secondary" style={{ fontSize: 12, flexShrink: 0 }}>
-                    {slot.timeStart}–{slot.timeEnd}
+                  <Text type="secondary" style={{ fontSize: 12, paddingLeft: 32, marginTop: 2, display: 'block' }}>
+                    {slot.timeStart.slice(0, 5)}–{slot.timeEnd.slice(0, 5)}
                   </Text>
                 )}
               </div>

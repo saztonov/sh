@@ -22,19 +22,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get the initial session — only this controls the loading state
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      setLoading(false);
-    });
+    let initialised = false;
 
-    // Listen for subsequent auth state changes (sign-in, sign-out, token refresh)
+    // onAuthStateChange is the single source of truth.
+    // It fires INITIAL_SESSION on subscribe, so we don't need a separate getSession() call.
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
+
+      // First event (INITIAL_SESSION) ends the loading state
+      if (!initialised) {
+        initialised = true;
+        setLoading(false);
+      }
+
+      // If Supabase could not refresh the token (expired refresh token → 401),
+      // it fires SIGNED_OUT. Clear storage so stale tokens don't cause a loop.
+      if (event === 'SIGNED_OUT') {
+        setSession(null);
+        setUser(null);
+      }
     });
 
     return () => {

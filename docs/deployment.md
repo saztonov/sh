@@ -29,7 +29,7 @@ Docker web-контейнер (127.0.0.1:8180 -> 80)
 |-----------|-------|------|------------|
 | sh-web-1 | nginx:alpine | 127.0.0.1:8180->80 | SPA + reverse proxy для API |
 | sh-api-1 | node:20-alpine | 3000 (Docker-сеть) | REST API (Fastify) |
-| sh-scraper-1 | playwright:v1.50.0 | -- | Парсер Google Classroom |
+| sh-scraper-1 | playwright:v1.58.2 | -- | Парсер Google Classroom |
 | sh-bot-1 | node:20-alpine | -- | Telegram-бот |
 
 ### Зависимости между контейнерами

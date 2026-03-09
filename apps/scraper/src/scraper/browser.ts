@@ -450,13 +450,29 @@ export async function captureSessionAuto(log?: ScrapeLogger): Promise<{ success:
       return { success: false, error: 'Автоматический вход не удался. Возможные причины: CAPTCHA, 2FA, неверные данные.' };
     }
 
-    // Wait for page to fully load
+    // Wait for page to fully load (SPA needs time in headless mode)
+    try {
+      await page.waitForLoadState('networkidle', { timeout: 15_000 });
+    } catch {
+      // networkidle may not fire on heavy SPA pages — continue anyway
+    }
     await page.waitForTimeout(3000);
 
     if (await isLoggedInToClassroom(page)) {
       await saveBrowserState(context);
       log?.info('session_save', 'Автологин Google успешен, сессия сохранена');
       logger.info('Auto-login successful, session saved');
+      await closeBrowser(browser);
+      await log?.flush();
+      return { success: true };
+    }
+
+    // Fallback: if URL is on classroom.google.com (not login page), save session anyway
+    const finalUrl = page.url();
+    if (isClassroomUrl(finalUrl) && !finalUrl.includes('accounts.google.com')) {
+      logger.info({ url: finalUrl }, 'Classroom URL looks authenticated, saving session despite DOM check failure');
+      await saveBrowserState(context);
+      log?.info('session_save', 'Автологин Google: URL авторизован, сессия сохранена');
       await closeBrowser(browser);
       await log?.flush();
       return { success: true };

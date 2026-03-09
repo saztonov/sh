@@ -47,15 +47,49 @@ function pluralAssignments(n: number): string {
   return `${n} заданий`;
 }
 
+const DATE_RANGE_STORAGE_KEY = 'assignments_date_range';
+
+function getDefaultDateRange(): [Dayjs, Dayjs] {
+  return [
+    dayjs().startOf('isoWeek'),
+    dayjs().startOf('isoWeek').add(20, 'day'),
+  ];
+}
+
+function getInitialDateRange(): [Dayjs | null, Dayjs | null] | null {
+  try {
+    const stored = localStorage.getItem(DATE_RANGE_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as [string | null, string | null];
+      if (parsed[0] === null && parsed[1] === null) return null;
+      return [
+        parsed[0] ? dayjs(parsed[0]) : null,
+        parsed[1] ? dayjs(parsed[1]) : null,
+      ];
+    }
+  } catch { /* ignore */ }
+  return getDefaultDateRange();
+}
+
 const AssignmentsPage: React.FC = () => {
   const isMobile = useIsMobile();
   const [subject, setSubject] = useState<string | undefined>(undefined);
   const [completedFilter, setCompletedFilter] = useState<CompletedFilter>('all');
-  const defaultDateRange: [Dayjs, Dayjs] = [
-    dayjs().startOf('isoWeek'),
-    dayjs().startOf('isoWeek').add(20, 'day'),
-  ];
-  const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(defaultDateRange);
+  const [dateRange, setDateRangeState] = useState<[Dayjs | null, Dayjs | null] | null>(getInitialDateRange);
+
+  const setDateRange = useCallback((dates: [Dayjs | null, Dayjs | null] | null) => {
+    setDateRangeState(dates);
+    try {
+      if (dates) {
+        localStorage.setItem(DATE_RANGE_STORAGE_KEY, JSON.stringify([
+          dates[0]?.format('YYYY-MM-DD') ?? null,
+          dates[1]?.format('YYYY-MM-DD') ?? null,
+        ]));
+      } else {
+        localStorage.setItem(DATE_RANGE_STORAGE_KEY, JSON.stringify([null, null]));
+      }
+    } catch { /* ignore */ }
+  }, []);
   const [drawerAssignmentId, setDrawerAssignmentId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 

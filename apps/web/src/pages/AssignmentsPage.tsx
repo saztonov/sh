@@ -51,10 +51,11 @@ const AssignmentsPage: React.FC = () => {
   const isMobile = useIsMobile();
   const [subject, setSubject] = useState<string | undefined>(undefined);
   const [completedFilter, setCompletedFilter] = useState<CompletedFilter>('all');
-  const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(() => [
-    dayjs().isoWeekday(1),
-    dayjs().isoWeekday(1).add(3, 'week').subtract(1, 'day'),
-  ]);
+  const defaultDateRange: [Dayjs, Dayjs] = [
+    dayjs().startOf('isoWeek'),
+    dayjs().startOf('isoWeek').add(20, 'day'),
+  ];
+  const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(defaultDateRange);
   const [drawerAssignmentId, setDrawerAssignmentId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 

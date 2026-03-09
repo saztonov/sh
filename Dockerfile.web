@@ -6,6 +6,11 @@ COPY packages/shared/package.json packages/shared/
 COPY apps/web/package.json apps/web/
 RUN npm ci --workspace=packages/shared --workspace=apps/web
 
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+
 COPY tsconfig.base.json ./
 COPY packages/shared packages/shared
 COPY apps/web apps/web

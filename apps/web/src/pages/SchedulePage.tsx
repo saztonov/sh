@@ -341,6 +341,7 @@ const SchedulePage: React.FC = () => {
             gridTemplateColumns: isWideDesktop ? 'repeat(2, 1fr)' : '1fr',
             gap: 12,
             alignItems: 'start',
+            padding: 2,
           }}
         >
           {days.map((day) => renderDayCard(day))}

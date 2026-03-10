@@ -12,7 +12,7 @@ interface LoginFormValues {
 }
 
 const LoginPage: React.FC = () => {
-  const { signIn, user } = useAuth();
+  const { signIn, user, session } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(false);
@@ -22,10 +22,12 @@ const LoginPage: React.FC = () => {
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/schedule';
 
   React.useEffect(() => {
-    if (user) {
+    // Редиректим только если есть и user, и действующая сессия.
+    // Без проверки session протухший токен вызывает цикл: LoginPage → schedule → 401 → LoginPage.
+    if (user && session) {
       navigate(from, { replace: true });
     }
-  }, [user, navigate, from]);
+  }, [user, session, navigate, from]);
 
   const handleSubmit = async (values: LoginFormValues) => {
     setLoading(true);

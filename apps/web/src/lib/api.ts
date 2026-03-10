@@ -24,13 +24,17 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+let isLoggingOut = false;
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Session expired - redirect to login
-      supabase.auth.signOut();
-      window.location.href = '/login';
+  async (error) => {
+    if (error.response?.status === 401 && !isLoggingOut) {
+      isLoggingOut = true;
+      // Дожидаемся signOut, чтобы localStorage был очищен до любого редиректа.
+      // onAuthStateChange в AuthContext обновит user → ProtectedRoute сделает Navigate.
+      await supabase.auth.signOut();
+      isLoggingOut = false;
     }
     return Promise.reject(error);
   },

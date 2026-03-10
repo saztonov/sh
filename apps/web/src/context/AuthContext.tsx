@@ -1,6 +1,7 @@
 import React, { createContext, useEffect, useState, useCallback, useMemo } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { SUPABASE_URL } from '../config';
 
 export interface AuthContextValue {
   user: User | null;
@@ -43,6 +44,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (event === 'SIGNED_OUT') {
         setSession(null);
         setUser(null);
+
+        // Страховка: принудительно удаляем ключ сессии из localStorage,
+        // чтобы при race condition не осталось протухших токенов.
+        const storageKey = `sb-${new URL(SUPABASE_URL || 'http://localhost').hostname.split('.')[0]}-auth-token`;
+        localStorage.removeItem(storageKey);
       }
     });
 

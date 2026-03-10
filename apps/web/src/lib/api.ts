@@ -31,10 +31,10 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response?.status === 401 && !isLoggingOut) {
       isLoggingOut = true;
-      // Дожидаемся signOut, чтобы localStorage был очищен до любого редиректа.
-      // onAuthStateChange в AuthContext обновит user → ProtectedRoute сделает Navigate.
-      await supabase.auth.signOut();
-      isLoggingOut = false;
+      // scope: 'local' — очищаем localStorage без обращения к серверу Supabase.
+      // При протухшем токене серверный signOut провалится, и локальная сессия не очистится.
+      // Флаг isLoggingOut не сбрасываем — после 401 все дальнейшие запросы бесполезны.
+      await supabase.auth.signOut({ scope: 'local' });
     }
     return Promise.reject(error);
   },

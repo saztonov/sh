@@ -23,7 +23,13 @@ dayjs.extend(relativeTime);
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 2,
+      retry: (failureCount, error) => {
+        // Не ретраить при 401 — токен протух, повторные запросы бесполезны
+        if (error && 'response' in error && (error as any).response?.status === 401) {
+          return false;
+        }
+        return failureCount < 2;
+      },
       refetchOnWindowFocus: true,
       staleTime: 60 * 1000,
     },

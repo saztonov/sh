@@ -374,24 +374,37 @@ async function autoLogin(page: Page, email: string, password: string, log?: Scra
   try {
     logger.info({ email }, 'Attempting automatic Google login...');
 
-    // Wait for email input
-    log?.info('auto_login', 'Ожидание поля email...');
-    const emailInput = await page.waitForSelector('input[type="email"]', { timeout: 15_000 });
-    if (!emailInput) {
-      logger.warn('Email input not found');
-      log?.warn('auto_login', 'Поле email не найдено');
-      const screenshotUrl = await uploadDebugScreenshot(page, 'no-email-input');
-      return { success: false, screenshotUrl: screenshotUrl ?? undefined };
+    // Check if we're on the "Verify your identity" page (session partially expired)
+    // Google shows the email and a "Next" button, no email input
+    const emailInput = await page.waitForSelector('input[type="email"]', { timeout: 5_000 }).catch(() => null);
+
+    if (emailInput) {
+      // Normal login flow: fill email and click Next
+      log?.info('auto_login', 'Поле email найдено, обычный вход');
+      await emailInput.fill(email);
+      log?.info('auto_login', 'Email введён');
+      logger.info('Email entered');
+
+      await page.click('#identifierNext');
+      log?.info('auto_login', 'Нажал "Далее" после email');
+      logger.info('Clicked Next after email');
+    } else {
+      // "Verify your identity" page: no email input, but there might be a "Next" button
+      log?.info('auto_login', 'Поле email не найдено — проверяю страницу подтверждения личности');
+      logger.info('No email input — checking for identity verification page');
+
+      // Look for a "Next" / "Далее" button on the verify identity page
+      const nextButton = await page.$('button:has-text("Далее"), button:has-text("Next"), #identifierNext');
+      if (nextButton) {
+        await nextButton.click();
+        log?.info('auto_login', 'Нажал "Далее" на странице подтверждения личности');
+        logger.info('Clicked Next on identity verification page');
+      } else {
+        log?.warn('auto_login', `Не найдены элементы входа, URL: ${page.url()}`);
+        const screenshotUrl = await uploadDebugScreenshot(page, 'no-login-elements');
+        return { success: false, screenshotUrl: screenshotUrl ?? undefined };
+      }
     }
-
-    await emailInput.fill(email);
-    log?.info('auto_login', 'Email введён');
-    logger.info('Email entered');
-
-    // Click "Next"
-    await page.click('#identifierNext');
-    log?.info('auto_login', 'Нажал "Далее" после email');
-    logger.info('Clicked Next after email');
 
     // Wait for password input
     log?.info('auto_login', 'Ожидание поля пароля...');

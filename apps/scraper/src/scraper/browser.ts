@@ -7,16 +7,16 @@ import { ScrapeLogger } from '../scrape-logger.js';
 import { uploadToS3 } from '../s3.js';
 
 /**
- * Upload a debug screenshot to S3. Returns the S3 URL or null on failure.
+ * Upload a debug screenshot to S3. Returns the S3 key or null on failure.
  * Never throws — errors are silently logged.
  */
 async function uploadDebugScreenshot(page: Page, label: string): Promise<string | null> {
   try {
     const buffer = await page.screenshot({ fullPage: true });
     const key = `debug/auto-login/${Date.now()}_${label}.png`;
-    const result = await uploadToS3(key, buffer, 'image/png');
+    await uploadToS3(key, buffer, 'image/png');
     logger.info({ key }, 'Debug screenshot uploaded to S3');
-    return result.s3Url;
+    return key;
   } catch (err) {
     logger.warn({ err }, 'Failed to upload debug screenshot');
     return null;

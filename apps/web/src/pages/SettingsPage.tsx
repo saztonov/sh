@@ -54,6 +54,7 @@ import {
   useUpdateTutorSubjects,
 } from '../hooks/useTutors';
 import { getSubjectColor } from '../lib/format';
+import { API_BASE_URL } from '../config';
 import {
   useCourses,
   useUpdateCourse,
@@ -871,7 +872,7 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
                         k === 'screenshot_url' && typeof v === 'string' ? (
                           <div key={k} style={{ marginTop: 4 }}>
                             <Image
-                              src={v}
+                              src={`${API_BASE_URL}/api/files/${v}`}
                               alt="Скриншот ошибки"
                               width={200}
                               style={{ borderRadius: 4, border: '1px solid #d9d9d9', cursor: 'pointer' }}
@@ -1070,7 +1071,7 @@ const ScrapeLogsTab: React.FC<TabProps> = ({ isMobile }) => {
                         k === 'screenshot_url' && typeof v === 'string' ? (
                           <div key={k} style={{ marginTop: 4 }}>
                             <Image
-                              src={v}
+                              src={`${API_BASE_URL}/api/files/${v}`}
                               alt="Скриншот ошибки"
                               width={200}
                               style={{ borderRadius: 4, border: '1px solid #d9d9d9', cursor: 'pointer' }}

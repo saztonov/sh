@@ -22,6 +22,7 @@ import {
   Modal,
   Input,
   Popconfirm,
+  Image,
 } from 'antd';
 import {
   CheckCircleOutlined,
@@ -866,11 +867,22 @@ const ScraperTab: React.FC<TabProps> = ({ isMobile, messageApi }) => {
                   </Text>
                   {log.details && (
                     <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
-                      {Object.entries(log.details).map(([k, v]) => (
-                        <span key={k} style={{ marginRight: 8 }}>
-                          {k}: {String(v)}
-                        </span>
-                      ))}
+                      {Object.entries(log.details).map(([k, v]) =>
+                        k === 'screenshot_url' && typeof v === 'string' ? (
+                          <div key={k} style={{ marginTop: 4 }}>
+                            <Image
+                              src={v}
+                              alt="Скриншот ошибки"
+                              width={200}
+                              style={{ borderRadius: 4, border: '1px solid #d9d9d9', cursor: 'pointer' }}
+                            />
+                          </div>
+                        ) : (
+                          <span key={k} style={{ marginRight: 8 }}>
+                            {k}: {String(v)}
+                          </span>
+                        ),
+                      )}
                     </div>
                   )}
                 </div>
@@ -1054,11 +1066,22 @@ const ScrapeLogsTab: React.FC<TabProps> = ({ isMobile }) => {
                   </Text>
                   {log.details && (
                     <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
-                      {Object.entries(log.details).map(([k, v]) => (
-                        <span key={k} style={{ marginRight: 8 }}>
-                          {k}: {String(v)}
-                        </span>
-                      ))}
+                      {Object.entries(log.details).map(([k, v]) =>
+                        k === 'screenshot_url' && typeof v === 'string' ? (
+                          <div key={k} style={{ marginTop: 4 }}>
+                            <Image
+                              src={v}
+                              alt="Скриншот ошибки"
+                              width={200}
+                              style={{ borderRadius: 4, border: '1px solid #d9d9d9', cursor: 'pointer' }}
+                            />
+                          </div>
+                        ) : (
+                          <span key={k} style={{ marginRight: 8 }}>
+                            {k}: {String(v)}
+                          </span>
+                        ),
+                      )}
                     </div>
                   )}
                 </div>

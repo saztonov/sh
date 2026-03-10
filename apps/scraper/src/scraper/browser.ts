@@ -4,6 +4,24 @@ import { config } from '../config.js';
 import { logger } from '../logger.js';
 import { supabase } from '../db.js';
 import { ScrapeLogger } from '../scrape-logger.js';
+import { uploadToS3 } from '../s3.js';
+
+/**
+ * Upload a debug screenshot to S3. Returns the S3 URL or null on failure.
+ * Never throws — errors are silently logged.
+ */
+async function uploadDebugScreenshot(page: Page, label: string): Promise<string | null> {
+  try {
+    const buffer = await page.screenshot({ fullPage: true });
+    const key = `debug/auto-login/${Date.now()}_${label}.png`;
+    const result = await uploadToS3(key, buffer, 'image/png');
+    logger.info({ key }, 'Debug screenshot uploaded to S3');
+    return result.s3Url;
+  } catch (err) {
+    logger.warn({ err }, 'Failed to upload debug screenshot');
+    return null;
+  }
+}
 
 /**
  * Build launch options based on config.
@@ -12,20 +30,22 @@ import { ScrapeLogger } from '../scrape-logger.js';
 function getLaunchOptions(headless: boolean) {
   const channel = config.playwright.channel;
 
+  const args = ['--disable-blink-features=AutomationControlled', '--no-first-run', '--no-default-browser-check'];
+
   // Empty channel → use Playwright's bundled Chromium (optimal for VPS)
   if (!channel) {
-    return { headless };
+    return { headless, args };
   }
 
   // Known channel names that Playwright supports directly
   const knownChannels = ['chrome', 'chrome-beta', 'chrome-dev', 'chrome-canary', 'msedge', 'msedge-beta', 'msedge-dev'];
 
   if (knownChannels.includes(channel)) {
-    return { headless, channel };
+    return { headless, channel, args };
   }
 
   // Treat as executable path (e.g. Yandex Browser)
-  return { headless, executablePath: channel };
+  return { headless, executablePath: channel, args };
 }
 
 /**
@@ -350,51 +370,66 @@ export async function captureSession(log?: ScrapeLogger): Promise<{ success: boo
  * Attempt automatic Google login using credentials from environment.
  * Returns true on success, false on failure (CAPTCHA, 2FA, wrong credentials, etc.)
  */
-async function autoLogin(page: Page, email: string, password: string): Promise<boolean> {
+async function autoLogin(page: Page, email: string, password: string, log?: ScrapeLogger): Promise<{ success: boolean; screenshotUrl?: string }> {
   try {
     logger.info({ email }, 'Attempting automatic Google login...');
 
     // Wait for email input
+    log?.info('auto_login', 'Ожидание поля email...');
     const emailInput = await page.waitForSelector('input[type="email"]', { timeout: 15_000 });
     if (!emailInput) {
       logger.warn('Email input not found');
-      return false;
+      log?.warn('auto_login', 'Поле email не найдено');
+      const screenshotUrl = await uploadDebugScreenshot(page, 'no-email-input');
+      return { success: false, screenshotUrl: screenshotUrl ?? undefined };
     }
 
     await emailInput.fill(email);
+    log?.info('auto_login', 'Email введён');
     logger.info('Email entered');
 
     // Click "Next"
     await page.click('#identifierNext');
+    log?.info('auto_login', 'Нажал "Далее" после email');
     logger.info('Clicked Next after email');
 
     // Wait for password input
+    log?.info('auto_login', 'Ожидание поля пароля...');
     const passwordInput = await page.waitForSelector('input[type="password"]:visible', { timeout: 15_000 });
     if (!passwordInput) {
       logger.warn('Password input not found — possible CAPTCHA or account chooser');
-      return false;
+      log?.warn('auto_login', `Поле пароля не найдено, URL: ${page.url()}`);
+      const screenshotUrl = await uploadDebugScreenshot(page, 'no-password-input');
+      return { success: false, screenshotUrl: screenshotUrl ?? undefined };
     }
 
     await passwordInput.fill(password);
+    log?.info('auto_login', 'Пароль введён');
     logger.info('Password entered');
 
     // Click "Next"
     await page.click('#passwordNext');
+    log?.info('auto_login', 'Нажал "Далее" после пароля');
     logger.info('Clicked Next after password');
 
     // Wait for redirect to Classroom
     try {
       await page.waitForURL(/classroom\.google\.com/, { timeout: 30_000 });
+      log?.info('auto_login', 'Перенаправлен на Classroom');
       logger.info({ url: page.url() }, 'Redirected to Classroom after auto-login');
-      return true;
+      return { success: true };
     } catch {
       const currentUrl = page.url();
       logger.warn({ url: currentUrl }, 'Did not redirect to Classroom — possible 2FA or error');
-      return false;
+      log?.warn('auto_login', `Нет редиректа на Classroom, URL: ${currentUrl}`);
+      const screenshotUrl = await uploadDebugScreenshot(page, 'no-redirect');
+      return { success: false, screenshotUrl: screenshotUrl ?? undefined };
     }
   } catch (err) {
     logger.error({ err }, 'Auto-login failed');
-    return false;
+    log?.error('auto_login', `Исключение: ${err instanceof Error ? err.message : String(err)}`);
+    const screenshotUrl = await uploadDebugScreenshot(page, 'exception');
+    return { success: false, screenshotUrl: screenshotUrl ?? undefined };
   }
 }
 
@@ -417,7 +452,13 @@ export async function captureSessionAuto(log?: ScrapeLogger): Promise<{ success:
     const launched = await launchBrowser(true);
     browser = launched.browser;
     const { context } = launched;
+
+    // Stealth: realistic viewport and user-agent
     const page = await context.newPage();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    });
 
     log?.info('browser_launch', 'Запуск браузера для автологина Google');
     logger.info('Navigating to Google Classroom for auto-login...');
@@ -439,12 +480,25 @@ export async function captureSessionAuto(log?: ScrapeLogger): Promise<{ success:
       return { success: true };
     }
 
-    // Attempt auto-login
+    // Attempt auto-login (with one retry)
     log?.info('auto_login', 'Попытка автоматического входа в Google');
-    const loginSuccess = await autoLogin(page, email, password);
+    let loginResult = await autoLogin(page, email, password, log);
 
-    if (!loginSuccess) {
-      log?.error('auto_login', 'Автологин Google не удался');
+    if (!loginResult.success) {
+      log?.warn('auto_login', 'Первая попытка не удалась, повтор через 3 сек...');
+      await page.waitForTimeout(3000);
+      await page.goto('https://classroom.google.com', {
+        waitUntil: 'domcontentloaded',
+        timeout: 60_000,
+      });
+      await page.waitForTimeout(2000);
+      loginResult = await autoLogin(page, email, password, log);
+    }
+
+    if (!loginResult.success) {
+      const details: Record<string, unknown> = {};
+      if (loginResult.screenshotUrl) details.screenshot_url = loginResult.screenshotUrl;
+      log?.error('auto_login', 'Автологин Google не удался', Object.keys(details).length > 0 ? details : undefined);
       await closeBrowser(browser);
       await log?.flush();
       return { success: false, error: 'Автоматический вход не удался. Возможные причины: CAPTCHA, 2FA, неверные данные.' };
@@ -481,8 +535,12 @@ export async function captureSessionAuto(log?: ScrapeLogger): Promise<{ success:
       return { success: true };
     }
 
-    log?.error('auto_login', `Автологин Google: финальный URL не на Classroom: ${finalUrl}`);
+    const screenshotUrl = await uploadDebugScreenshot(page, 'final-url-not-classroom');
+    const details: Record<string, unknown> = {};
+    if (screenshotUrl) details.screenshot_url = screenshotUrl;
+    log?.error('auto_login', `Автологин Google: финальный URL не на Classroom: ${finalUrl}`, Object.keys(details).length > 0 ? details : undefined);
     await closeBrowser(browser);
+    await log?.flush();
     return { success: false, error: `Автологин выполнен, но финальный URL: ${finalUrl}` };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);

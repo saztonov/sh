@@ -10,6 +10,10 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function optionalEnv(name: string): string | undefined {
+  return process.env[name] || undefined;
+}
+
 export const config = {
   supabase: {
     url: requireEnv('SUPABASE_URL'),
@@ -18,6 +22,13 @@ export const config = {
   telegram: {
     botToken: requireEnv('TELEGRAM_BOT_TOKEN'),
     adminId: parseInt(requireEnv('TELEGRAM_ADMIN_ID'), 10),
+  },
+  ai: {
+    provider: (process.env['AI_PROVIDER'] ?? 'cerebras') as 'cerebras' | 'google' | 'groq',
+    model: optionalEnv('AI_MODEL'),
+    cerebrasApiKey: optionalEnv('CEREBRAS_API_KEY'),
+    googleApiKey: optionalEnv('GOOGLE_AI_API_KEY'),
+    groqApiKey: optionalEnv('GROQ_API_KEY'),
   },
 } as const;
 

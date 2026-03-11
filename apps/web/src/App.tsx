@@ -8,6 +8,7 @@ import AssignmentsPage from './pages/AssignmentsPage';
 import SettingsPage from './pages/SettingsPage';
 import TutorsPage from './pages/TutorsPage';
 import ProfilePage from './pages/ProfilePage';
+import AgentLogsPage from './pages/AgentLogsPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 const App: React.FC = () => {
@@ -30,6 +31,7 @@ const App: React.FC = () => {
         <Route path="tutors" element={<TutorsPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="profile" element={<ProfilePage />} />
+        <Route path="agent-logs" element={<AgentLogsPage />} />
       </Route>
 
       {/* Catch-all */}

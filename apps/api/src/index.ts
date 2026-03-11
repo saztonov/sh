@@ -12,6 +12,7 @@ import scraperRoutes from './routes/scraper.js';
 import tutorRoutes from './routes/tutors.js';
 import profileRoutes from './routes/profile.js';
 import userRoutes from './routes/users.js';
+import agentLogsRoutes from './routes/agent-logs.js';
 
 async function main(): Promise<void> {
   const fastify = Fastify({
@@ -50,6 +51,7 @@ async function main(): Promise<void> {
   await fastify.register(tutorRoutes, { prefix: '/api' });
   await fastify.register(profileRoutes, { prefix: '/api' });
   await fastify.register(userRoutes, { prefix: '/api' });
+  await fastify.register(agentLogsRoutes, { prefix: '/api' });
 
   // Graceful shutdown
   const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];

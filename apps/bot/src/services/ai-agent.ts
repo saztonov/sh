@@ -1,0 +1,235 @@
+/**
+ * AI Agent Service.
+ * Manages per-user conversation history and runs the agentic tool-use loop
+ * via Vercel AI SDK (provider configurable via AI_PROVIDER env var).
+ */
+import { generateText } from 'ai';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createGroq } from '@ai-sdk/groq';
+import { createOpenAI } from '@ai-sdk/openai';
+import type { CoreMessage } from 'ai';
+import dayjs from 'dayjs';
+import 'dayjs/locale/ru.js';
+import { config } from '../config.js';
+import { logger } from '../logger.js';
+import { supabase } from '../db.js';
+import { agentTools } from '../tools/definitions.js';
+
+dayjs.locale('ru');
+
+// ── Provider setup ─────────────────────────────────────────────────────────────
+
+const DEFAULT_MODELS = {
+  cerebras: 'glm-4-32b',
+  google: 'gemini-2.0-flash',
+  groq: 'llama-3.3-70b-versatile',
+} as const;
+
+function buildModel() {
+  const { provider, model, cerebrasApiKey, googleApiKey, groqApiKey } = config.ai;
+  const modelId = model ?? DEFAULT_MODELS[provider];
+
+  switch (provider) {
+    case 'cerebras': {
+      if (!cerebrasApiKey) throw new Error('CEREBRAS_API_KEY is required for provider=cerebras');
+      const cerebras = createOpenAI({
+        apiKey: cerebrasApiKey,
+        baseURL: 'https://api.cerebras.ai/v1',
+        name: 'cerebras',
+      });
+      return cerebras(modelId);
+    }
+    case 'google': {
+      if (!googleApiKey) throw new Error('GOOGLE_AI_API_KEY is required for provider=google');
+      const google = createGoogleGenerativeAI({ apiKey: googleApiKey });
+      return google(modelId);
+    }
+    case 'groq': {
+      if (!groqApiKey) throw new Error('GROQ_API_KEY is required for provider=groq');
+      const groq = createGroq({ apiKey: groqApiKey });
+      return groq(modelId);
+    }
+    default:
+      throw new Error(`Unknown AI_PROVIDER: ${provider}`);
+  }
+}
+
+const aiModel = buildModel();
+
+// ── Conversation history ───────────────────────────────────────────────────────
+
+interface ConversationEntry {
+  sessionId: string;
+  messages: CoreMessage[];
+  lastActivity: number;
+}
+
+/** In-memory store: telegram_id → conversation state */
+const conversations = new Map<number, ConversationEntry>();
+
+const MAX_HISTORY = 20;     // messages kept per user
+const TTL_MS = 30 * 60 * 1000; // 30 min inactivity → reset
+
+function getOrCreateConversation(telegramId: number): ConversationEntry {
+  const existing = conversations.get(telegramId);
+  if (existing && Date.now() - existing.lastActivity < TTL_MS) {
+    return existing;
+  }
+  const entry: ConversationEntry = {
+    sessionId: crypto.randomUUID(),
+    messages: [],
+    lastActivity: Date.now(),
+  };
+  conversations.set(telegramId, entry);
+  return entry;
+}
+
+export function resetConversation(telegramId: number): void {
+  conversations.delete(telegramId);
+}
+
+// ── System prompt ──────────────────────────────────────────────────────────────
+
+function buildSystemPrompt(): string {
+  return `Ты — помощник по управлению учебным порталом домашних заданий. Сегодня ${dayjs().format('D MMMM YYYY, dddd')}.
+
+Ты помогаешь управлять: заданиями, расписанием, занятиями с репетиторами, файлами.
+
+Правила:
+- Всегда отвечай на русском языке
+- Если запрос неоднозначен — уточни (например, "какого репетитора перенести?")
+- Перед удалением любой записи — явно сообщи, что именно будет удалено, и попроси подтвердить
+- При работе с датами и временем используй формат, удобный пользователю (например: "в пятницу 14 марта в 16:00")
+- Если нужен UUID сущности, сначала получи список инструментом (например list_tutors), затем используй нужный id
+- Форматируй ответы кратко и читаемо`;
+}
+
+// ── Logging ────────────────────────────────────────────────────────────────────
+
+async function logEvent(params: {
+  session_id: string;
+  telegram_id: number;
+  event_type: string;
+  provider?: string;
+  model?: string;
+  content?: string;
+  tool_name?: string;
+  tool_args?: unknown;
+  tokens_in?: number;
+  tokens_out?: number;
+}): Promise<void> {
+  try {
+    await supabase.from('agent_logs').insert({
+      session_id: params.session_id,
+      telegram_id: params.telegram_id,
+      event_type: params.event_type,
+      provider: params.provider ?? config.ai.provider,
+      model: params.model ?? (config.ai.model ?? DEFAULT_MODELS[config.ai.provider]),
+      content: params.content,
+      tool_name: params.tool_name ?? null,
+      tool_args: params.tool_args ?? null,
+      tokens_in: params.tokens_in ?? 0,
+      tokens_out: params.tokens_out ?? 0,
+    });
+  } catch (err) {
+    logger.warn({ err }, 'Failed to write agent_log entry');
+  }
+}
+
+// ── Main entry point ───────────────────────────────────────────────────────────
+
+export async function runAgent(
+  telegramId: number,
+  userText: string,
+): Promise<string> {
+  const conv = getOrCreateConversation(telegramId);
+  conv.lastActivity = Date.now();
+
+  // Log user message
+  await logEvent({
+    session_id: conv.sessionId,
+    telegram_id: telegramId,
+    event_type: 'user_message',
+    content: userText,
+  });
+
+  // Append user message to history
+  conv.messages.push({ role: 'user', content: userText });
+
+  // Trim history to MAX_HISTORY (keep pairs)
+  if (conv.messages.length > MAX_HISTORY) {
+    conv.messages = conv.messages.slice(conv.messages.length - MAX_HISTORY);
+  }
+
+  try {
+    // Log model request
+    await logEvent({
+      session_id: conv.sessionId,
+      telegram_id: telegramId,
+      event_type: 'model_request',
+      content: JSON.stringify({ messages_count: conv.messages.length }),
+    });
+
+    const result = await generateText({
+      model: aiModel,
+      system: buildSystemPrompt(),
+      messages: conv.messages,
+      tools: agentTools,
+      maxSteps: 8,
+      onStepFinish: async (step) => {
+        // Log tool calls
+        for (const tc of step.toolCalls ?? []) {
+          await logEvent({
+            session_id: conv.sessionId,
+            telegram_id: telegramId,
+            event_type: 'tool_call',
+            tool_name: tc.toolName,
+            tool_args: tc.args,
+          });
+        }
+        // Log tool results
+        for (const tr of step.toolResults ?? []) {
+          await logEvent({
+            session_id: conv.sessionId,
+            telegram_id: telegramId,
+            event_type: 'tool_result',
+            tool_name: tr.toolName,
+            content: JSON.stringify(tr.result),
+          });
+        }
+      },
+    });
+
+    const responseText = result.text || 'Готово.';
+
+    // Log model response with token usage
+    await logEvent({
+      session_id: conv.sessionId,
+      telegram_id: telegramId,
+      event_type: 'model_response',
+      content: responseText,
+      tokens_in: result.usage?.promptTokens ?? 0,
+      tokens_out: result.usage?.completionTokens ?? 0,
+    });
+
+    // Update conversation history with assistant response
+    conv.messages.push({ role: 'assistant', content: responseText });
+
+    return responseText;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error({ err, telegramId }, 'AI agent error');
+
+    await logEvent({
+      session_id: conv.sessionId,
+      telegram_id: telegramId,
+      event_type: 'error',
+      content: message,
+    });
+
+    // Remove the failed user message from history to avoid broken state
+    conv.messages.pop();
+
+    return `Произошла ошибка при обработке запроса: ${message}`;
+  }
+}

@@ -1,6 +1,7 @@
 /**
  * Natural language text handler.
- * Matches Russian phrases and routes to the appropriate command logic.
+ * First tries regex pattern matching for common queries,
+ * then falls back to the AI agent for anything else.
  */
 import type { Context } from 'grammy';
 import dayjs from 'dayjs';
@@ -8,6 +9,7 @@ import { supabase } from '../db.js';
 import { logger } from '../logger.js';
 import { formatAssignmentList } from '../formatters/assignment.js';
 import { isAuthorized } from '../middleware/auth.js';
+import { runAgent } from '../services/ai-agent.js';
 
 /** Patterns for "today" intent */
 const TODAY_PATTERNS = [
@@ -164,6 +166,12 @@ export async function textHandler(ctx: Context): Promise<void> {
     return;
   }
 
-  // No match -- do not reply to avoid noise
-  logger.debug({ text }, 'Text did not match any pattern');
+  // No regex match — route to AI agent
+  logger.debug({ text }, 'Text did not match any pattern — routing to AI agent');
+  const telegramId = ctx.from?.id;
+  if (!telegramId) return;
+
+  await ctx.replyWithChatAction('typing');
+  const response = await runAgent(telegramId, text);
+  await ctx.reply(response, { parse_mode: 'HTML' });
 }

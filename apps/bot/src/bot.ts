@@ -10,6 +10,7 @@ import { todayCommand } from './commands/today.js';
 import { tomorrowCommand } from './commands/tomorrow.js';
 import { weekCommand } from './commands/week.js';
 import { scheduleCommand } from './commands/schedule.js';
+import { resetCommand } from './commands/reset.js';
 import { textHandler } from './handlers/text.js';
 
 export function createBot(): Bot {
@@ -26,6 +27,7 @@ export function createBot(): Bot {
   bot.command('tomorrow', tomorrowCommand);
   bot.command('week', weekCommand);
   bot.command('schedule', scheduleCommand);
+  bot.command('reset', resetCommand);
 
   // Natural language text handler (must be registered after commands)
   bot.on('message:text', textHandler);

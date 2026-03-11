@@ -11,15 +11,17 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   MenuOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useAuth } from '../../hooks/useAuth';
+import { useProfile } from '../../hooks/useProfile';
 import { useIsMobile } from '../../hooks/useMediaQuery';
 
 const { Sider, Header, Content } = Layout;
 const { Text } = Typography;
 
-const menuItems: MenuProps['items'] = [
+const baseMenuItems: MenuProps['items'] = [
   {
     key: '/schedule',
     icon: <ScheduleOutlined />,
@@ -44,6 +46,7 @@ const menuItems: MenuProps['items'] = [
 
 const AppLayout: React.FC = () => {
   const { user, signOut } = useAuth();
+  const { data: profile } = useProfile();
   const navigate = useNavigate();
   const location = useLocation();
   const isMobile = useIsMobile();
@@ -51,6 +54,13 @@ const AppLayout: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const currentKey = '/' + location.pathname.split('/')[1];
+
+  const menuItems: MenuProps['items'] = [
+    ...baseMenuItems,
+    ...(profile?.role === 'admin'
+      ? [{ key: '/agent-logs', icon: <RobotOutlined />, label: 'AI-агент' }]
+      : []),
+  ];
 
   const handleMenuClick: MenuProps['onClick'] = ({ key }) => {
     navigate(key);

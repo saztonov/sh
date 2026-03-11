@@ -24,11 +24,12 @@ export const config = {
     adminId: parseInt(requireEnv('TELEGRAM_ADMIN_ID'), 10),
   },
   ai: {
-    provider: (process.env['AI_PROVIDER'] ?? 'cerebras') as 'cerebras' | 'google' | 'groq',
+    provider: (process.env['AI_PROVIDER'] ?? 'cerebras') as 'cerebras' | 'google' | 'groq' | 'openrouter',
     model: optionalEnv('AI_MODEL'),
     cerebrasApiKey: optionalEnv('CEREBRAS_API_KEY'),
     googleApiKey: optionalEnv('GOOGLE_AI_API_KEY'),
     groqApiKey: optionalEnv('GROQ_API_KEY'),
+    openrouterApiKey: optionalEnv('OPENROUTER_API_KEY'),
   },
 } as const;
 

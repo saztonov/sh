@@ -337,6 +337,7 @@ const AgentLogsPage: React.FC = () => {
               { value: 'cerebras', label: 'Cerebras' },
               { value: 'google', label: 'Google' },
               { value: 'groq', label: 'Groq' },
+              { value: 'openrouter', label: 'OpenRouter' },
             ]}
           />
           <Input

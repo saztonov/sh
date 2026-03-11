@@ -23,10 +23,11 @@ const DEFAULT_MODELS = {
   cerebras: 'glm-4-32b',
   google: 'gemini-2.0-flash',
   groq: 'llama-3.3-70b-versatile',
+  openrouter: 'google/gemini-2.0-flash-001',
 } as const;
 
 function buildModel() {
-  const { provider, model, cerebrasApiKey, googleApiKey, groqApiKey } = config.ai;
+  const { provider, model, cerebrasApiKey, googleApiKey, groqApiKey, openrouterApiKey } = config.ai;
   const modelId = model ?? DEFAULT_MODELS[provider];
 
   switch (provider) {
@@ -48,6 +49,15 @@ function buildModel() {
       if (!groqApiKey) throw new Error('GROQ_API_KEY is required for provider=groq');
       const groq = createGroq({ apiKey: groqApiKey });
       return groq(modelId);
+    }
+    case 'openrouter': {
+      if (!openrouterApiKey) throw new Error('OPENROUTER_API_KEY is required for provider=openrouter');
+      const openrouter = createOpenAI({
+        apiKey: openrouterApiKey,
+        baseURL: 'https://openrouter.ai/api/v1',
+        name: 'openrouter',
+      });
+      return openrouter(modelId);
     }
     default:
       throw new Error(`Unknown AI_PROVIDER: ${provider}`);

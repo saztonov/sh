@@ -1,7 +1,6 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import type { UserProfile } from '@homework/shared';
 import api from '../lib/api';
-import { supabase } from '../lib/supabase';
 
 export function useProfile() {
   return useQuery<UserProfile>({
@@ -19,10 +18,13 @@ export function useChangeMyPassword() {
     mutationFn: async (password: string) => {
       await api.patch('/api/auth/me/password', { password });
     },
-    onSuccess: async () => {
-      // После смены пароля старые токены невалидны — выходим локально,
-      // чтобы пользователь зашёл заново с новым паролем.
-      await supabase.auth.signOut({ scope: 'local' });
+    onSuccess: () => {
+      // TanStack Query v5 не awaits async onSuccess, поэтому supabase.auth.signOut() ненадёжен.
+      // Очищаем localStorage напрямую и делаем хард-редирект — гарантированный выход.
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('sb-')) localStorage.removeItem(key);
+      });
+      window.location.replace('/login');
     },
   });
 }

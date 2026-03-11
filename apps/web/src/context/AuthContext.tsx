@@ -30,6 +30,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, newSession) => {
+      // USER_UPDATED: admin.updateUserById пушит это событие с новой сессией.
+      // Не переустанавливаем сессию — иначе после нашего logout user становится
+      // ненулевым снова и LoginPage редиректит обратно на защищённую страницу (цикл).
+      if (event === 'USER_UPDATED') {
+        if (newSession?.user) setUser(newSession.user);
+        return;
+      }
+
       setSession(newSession);
       setUser(newSession?.user ?? null);
 

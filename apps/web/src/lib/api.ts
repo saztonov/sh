@@ -28,13 +28,18 @@ let isLoggingOut = false;
 
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
+  (error) => {
     if (error.response?.status === 401 && !isLoggingOut) {
       isLoggingOut = true;
-      // scope: 'local' — очищаем localStorage без обращения к серверу Supabase.
-      // При протухшем токене серверный signOut провалится, и локальная сессия не очистится.
-      // Флаг isLoggingOut не сбрасываем — после 401 все дальнейшие запросы бесполезны.
-      await supabase.auth.signOut({ scope: 'local' });
+      // Синхронно очищаем все ключи Supabase из localStorage, затем делаем хард-редирект.
+      // Нельзя полагаться на supabase.auth.signOut() + onAuthStateChange:
+      // — TanStack Query v5 не awaits async onSuccess, создавая race window
+      // — admin.updateUserById пушит USER_UPDATED с newSession, что перезаписывает user=null
+      // Хард-редирект гарантирует свежую инициализацию SDK с пустым localStorage.
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('sb-')) localStorage.removeItem(key);
+      });
+      window.location.replace('/login');
     }
     return Promise.reject(error);
   },

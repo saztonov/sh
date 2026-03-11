@@ -1,5 +1,4 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Card, Typography, Form, Input, Button, Descriptions, Tag, message, Spin } from 'antd';
 import { BANNED_PASSWORDS } from '@homework/shared';
 import { useProfile, useChangeMyPassword } from '../hooks/useProfile';
@@ -13,7 +12,6 @@ const ROLE_COLORS = { admin: 'red', user: 'blue' } as const;
 
 const ProfilePage: React.FC = () => {
   const isMobile = useIsMobile();
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { data: profile, isLoading } = useProfile();
   const changePassword = useChangeMyPassword();
@@ -24,9 +22,7 @@ const ProfilePage: React.FC = () => {
     try {
       const values = await form.validateFields();
       await changePassword.mutateAsync(values.password);
-      // mutateAsync вызывает signOut в onSuccess — сессия уже очищена
-      messageApi.success('Пароль изменён. Выполняется выход...');
-      setTimeout(() => navigate('/login', { replace: true }), 1000);
+      // onSuccess в мутации очищает localStorage и делает window.location.replace('/login')
     } catch (err: any) {
       const msg = err?.response?.data?.error || 'Не удалось изменить пароль';
       messageApi.error(msg);

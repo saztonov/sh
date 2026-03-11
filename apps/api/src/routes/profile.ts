@@ -31,7 +31,7 @@ const profileRoutes: FastifyPluginAsync = async (fastify) => {
           id: request.user.id,
           display_name: request.user.email ?? '',
           email: request.user.email ?? '',
-          role: 'user',
+          role: request.user.role,
           created_at: new Date().toISOString(),
         } satisfies UserProfile,
       };

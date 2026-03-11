@@ -156,20 +156,29 @@ async function logEvent(params: {
 
 // ── Main entry point ───────────────────────────────────────────────────────────
 
+/**
+ * Log an incoming user message. Call this from the text handler before
+ * pattern matching so that ALL messages are recorded, not just AI ones.
+ */
+export async function logIncomingMessage(
+  telegramId: number,
+  text: string,
+): Promise<void> {
+  const conv = getOrCreateConversation(telegramId);
+  conv.lastActivity = Date.now();
+  await logEvent({
+    session_id: conv.sessionId,
+    telegram_id: telegramId,
+    event_type: 'user_message',
+    content: text,
+  });
+}
+
 export async function runAgent(
   telegramId: number,
   userText: string,
 ): Promise<string> {
   const conv = getOrCreateConversation(telegramId);
-  conv.lastActivity = Date.now();
-
-  // Log user message
-  await logEvent({
-    session_id: conv.sessionId,
-    telegram_id: telegramId,
-    event_type: 'user_message',
-    content: userText,
-  });
 
   // Append user message to history
   conv.messages.push({ role: 'user', content: userText });

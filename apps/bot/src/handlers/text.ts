@@ -9,7 +9,7 @@ import { supabase } from '../db.js';
 import { logger } from '../logger.js';
 import { formatAssignmentList } from '../formatters/assignment.js';
 import { isAuthorized } from '../middleware/auth.js';
-import { runAgent } from '../services/ai-agent.js';
+import { runAgent, logIncomingMessage } from '../services/ai-agent.js';
 
 /** Patterns for "today" intent */
 const TODAY_PATTERNS = [
@@ -93,6 +93,12 @@ export async function textHandler(ctx: Context): Promise<void> {
 
   if (!(await isAuthorized(ctx))) return;
 
+  const telegramId = ctx.from?.id;
+  if (!telegramId) return;
+
+  // Log every incoming message regardless of how it's handled
+  await logIncomingMessage(telegramId, text);
+
   // Check patterns in order of specificity (week before today, since "today"
   // pattern is very broad)
   if (matchesAny(text, WEEK_PATTERNS)) {
@@ -168,9 +174,6 @@ export async function textHandler(ctx: Context): Promise<void> {
 
   // No regex match — route to AI agent
   logger.debug({ text }, 'Text did not match any pattern — routing to AI agent');
-  const telegramId = ctx.from?.id;
-  if (!telegramId) return;
-
   await ctx.replyWithChatAction('typing');
   const response = await runAgent(telegramId, text);
   await ctx.reply(response, { parse_mode: 'HTML' });

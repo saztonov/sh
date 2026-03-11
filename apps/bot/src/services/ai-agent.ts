@@ -64,7 +64,15 @@ function buildModel() {
   }
 }
 
-const aiModel = buildModel();
+// Lazy singleton — built on first call to runAgent, not at module load time
+let aiModel: ReturnType<typeof buildModel> | null = null;
+
+function getModel(): ReturnType<typeof buildModel> {
+  if (!aiModel) {
+    aiModel = buildModel();
+  }
+  return aiModel;
+}
 
 // ── Conversation history ───────────────────────────────────────────────────────
 
@@ -181,7 +189,7 @@ export async function runAgent(
     });
 
     const result = await generateText({
-      model: aiModel,
+      model: getModel(),
       system: buildSystemPrompt(),
       messages: conv.messages,
       tools: agentTools,

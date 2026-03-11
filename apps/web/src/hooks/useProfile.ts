@@ -18,13 +18,5 @@ export function useChangeMyPassword() {
     mutationFn: async (password: string) => {
       await api.patch('/api/auth/me/password', { password });
     },
-    onSuccess: () => {
-      // TanStack Query v5 не awaits async onSuccess, поэтому supabase.auth.signOut() ненадёжен.
-      // Очищаем localStorage напрямую и делаем хард-редирект — гарантированный выход.
-      Object.keys(localStorage).forEach((key) => {
-        if (key.startsWith('sb-')) localStorage.removeItem(key);
-      });
-      window.location.replace('/login');
-    },
   });
 }

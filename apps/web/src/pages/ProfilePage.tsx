@@ -22,7 +22,13 @@ const ProfilePage: React.FC = () => {
     try {
       const values = await form.validateFields();
       await changePassword.mutateAsync(values.password);
-      // onSuccess в мутации очищает localStorage и делает window.location.replace('/login')
+      // Очищаем сессию и делаем хард-редирект синхронно, прямо здесь.
+      // onSuccess в хуке срабатывает позже (TanStack Query v5), когда пользователь
+      // уже может быть на другой странице — это очищало бы валидную сессию.
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('sb-')) localStorage.removeItem(key);
+      });
+      window.location.replace('/login');
     } catch (err: any) {
       const msg = err?.response?.data?.error || 'Не удалось изменить пароль';
       messageApi.error(msg);

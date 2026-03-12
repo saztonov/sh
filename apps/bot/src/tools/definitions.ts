@@ -24,7 +24,7 @@ export const agentTools = {
   }),
 
   get_assignment_details: tool({
-    description: '[ШКОЛА] Детали школьного задания: описание и вложенные файлы.',
+    description: '[ШКОЛА] Детали школьного задания: описание, вложенные файлы и ссылки для скачивания (download_url).',
     parameters: z.object({
       id: z.string().describe('UUID задания'),
     }),

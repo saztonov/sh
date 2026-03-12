@@ -53,6 +53,19 @@ export async function getAssignmentDetails(args: { id: string }) {
     .eq('id', args.id)
     .single();
   if (error) throw new Error(error.message);
+
+  // Generate presigned download URLs for each attachment
+  if (data.attachments && Array.isArray(data.attachments)) {
+    data.attachments = await Promise.all(
+      data.attachments.map(async (att: { s3_key?: string; original_name?: string; [key: string]: unknown }) => ({
+        ...att,
+        download_url: att.s3_key
+          ? await getPresignedUrl(att.s3_key, att.original_name ?? 'file')
+          : null,
+      })),
+    );
+  }
+
   return data;
 }
 

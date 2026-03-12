@@ -19,6 +19,14 @@ export const config = {
     url: requireEnv('SUPABASE_URL'),
     serviceRoleKey: requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
   },
+  s3: {
+    endpoint: optionalEnv('S3_ENDPOINT'),
+    region: optionalEnv('S3_REGION'),
+    bucket: optionalEnv('S3_BUCKET'),
+    tenantId: optionalEnv('S3_TENANT_ID'),
+    accessKey: optionalEnv('S3_ACCESS_KEY'),
+    secretKey: optionalEnv('S3_SECRET_KEY'),
+  },
   telegram: {
     botToken: requireEnv('TELEGRAM_BOT_TOKEN'),
     adminId: parseInt(requireEnv('TELEGRAM_ADMIN_ID'), 10),

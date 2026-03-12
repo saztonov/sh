@@ -5,6 +5,7 @@
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek.js';
 import { supabase } from '../db.js';
+import { getPresignedUrl } from '../s3.js';
 
 dayjs.extend(isoWeek);
 
@@ -243,11 +244,23 @@ export async function deleteTutorSession(args: { id: string }) {
 export async function getFileInfo(args: { attachment_id: string }) {
   const { data, error } = await supabase
     .from('attachments')
-    .select('id, original_name, mime_type, size_bytes, s3_url, classroom_url')
+    .select('id, original_name, mime_type, size_bytes, s3_key, s3_url, classroom_url')
     .eq('id', args.attachment_id)
     .single();
   if (error) throw new Error(error.message);
-  return data;
+
+  const download_url = data.s3_key
+    ? await getPresignedUrl(data.s3_key, data.original_name)
+    : null;
+
+  return {
+    id: data.id,
+    original_name: data.original_name,
+    mime_type: data.mime_type,
+    size_bytes: data.size_bytes,
+    download_url,
+    classroom_url: data.classroom_url,
+  };
 }
 
 // ── Scraper ────────────────────────────────────────────────────────────────────

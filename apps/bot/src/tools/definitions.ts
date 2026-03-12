@@ -9,7 +9,7 @@ import * as exec from './executor.js';
 export const agentTools = {
   get_assignments: tool({
     description:
-      '[ШКОЛА] Получить список школьных домашних заданий. Фильтры: период (today/tomorrow/week), дата, предмет, статус выполнения.',
+      '[ШКОЛА] Получить список школьных домашних заданий (без вложений). Для получения вложений используй get_assignment_details. Фильтры: период (today/tomorrow/week), дата, предмет, статус выполнения.',
     parameters: z.object({
       period: z.enum(['today', 'tomorrow', 'week']).optional()
         .describe('Период: today — сегодня, tomorrow — завтра, week — текущая неделя'),

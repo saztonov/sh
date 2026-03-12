@@ -85,7 +85,7 @@ interface ConversationEntry {
 /** In-memory store: telegram_id → conversation state */
 const conversations = new Map<number, ConversationEntry>();
 
-const MAX_HISTORY = 20;     // messages kept per user
+const MAX_HISTORY = 40;     // messages kept per user (includes tool call/result messages)
 const TTL_MS = 30 * 60 * 1000; // 30 min inactivity → reset
 
 function getOrCreateConversation(telegramId: number): ConversationEntry {
@@ -122,6 +122,11 @@ function buildSystemPrompt(): string {
    Инструменты: list_tutors, get_tutor_sessions, create_tutor, create_tutor_session и другие *tutor* инструменты.
 
 Никогда не используй школьные инструменты для запросов о репетиторах и наоборот.
+
+Форматирование заданий:
+- Всегда указывай дату сдачи (due_date) для каждого задания
+- Указывай статус: ✅ выполнено / ⬜ не сдано
+- Если пользователь спрашивает о файлах/вложениях — вызови get_assignment_details для каждого задания, чтобы получить список вложений
 
 Правила:
 - Всегда отвечай на русском языке
@@ -249,8 +254,8 @@ export async function runAgent(
       tokens_out: result.usage?.completionTokens ?? 0,
     });
 
-    // Update conversation history with assistant response
-    conv.messages.push({ role: 'assistant', content: responseText });
+    // Update conversation history with full response (including tool calls/results)
+    conv.messages.push(...result.response.messages);
 
     return responseText;
   } catch (err) {

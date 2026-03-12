@@ -176,7 +176,8 @@ export async function getTutorSessions(args: { week_offset?: number }) {
 }
 
 export async function createTutorSession(args: {
-  tutor_id: string;
+  tutor_id?: string;
+  tutor_name?: string;
   subject: string;
   day_of_week: number;
   time_start: string;
@@ -185,9 +186,32 @@ export async function createTutorSession(args: {
   specific_date?: string;
   effective_from?: string;
 }) {
+  let tutorId = args.tutor_id;
+
+  if (!tutorId) {
+    if (!args.tutor_name) {
+      throw new Error('Необходимо указать tutor_id или tutor_name');
+    }
+    const { data: tutors, error: searchError } = await supabase
+      .from('tutors')
+      .select('id, name')
+      .ilike('name', `%${args.tutor_name}%`);
+    if (searchError) throw new Error(searchError.message);
+
+    if (!tutors || tutors.length === 0) {
+      throw new Error(`Репетитор «${args.tutor_name}» не найден`);
+    }
+    if (tutors.length > 1) {
+      const names = tutors.map((t) => `${t.name} (${t.id})`).join(', ');
+      throw new Error(`Найдено несколько репетиторов: ${names}. Уточните имя.`);
+    }
+    tutorId = tutors[0].id;
+  }
+
+  const { tutor_name: _, ...rest } = args;
   const { data, error } = await supabase
     .from('tutor_sessions')
-    .insert(args)
+    .insert({ ...rest, tutor_id: tutorId })
     .select('id, tutor_id, subject, day_of_week, time_start, duration_hours, is_recurring')
     .single();
   if (error) throw new Error(error.message);

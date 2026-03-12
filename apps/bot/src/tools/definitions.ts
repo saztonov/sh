@@ -90,9 +90,10 @@ export const agentTools = {
   }),
 
   create_tutor_session: tool({
-    description: 'Создать занятие с репетитором (разовое или регулярное).',
+    description: 'Создать занятие с репетитором (разовое или регулярное). Можно передать tutor_id (UUID) или tutor_name (имя) — репетитор будет найден автоматически.',
     parameters: z.object({
-      tutor_id: z.string().describe('UUID репетитора'),
+      tutor_id: z.string().optional().describe('UUID репетитора (если известен)'),
+      tutor_name: z.string().optional().describe('Имя репетитора (например: Алексей). Используй, если UUID неизвестен'),
       subject: z.string().describe('Предмет'),
       day_of_week: z.number().int().min(1).max(7)
         .describe('День недели: 1 — пн, 2 — вт, ..., 7 — вс'),

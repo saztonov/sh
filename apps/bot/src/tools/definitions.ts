@@ -9,7 +9,7 @@ import * as exec from './executor.js';
 export const agentTools = {
   get_assignments: tool({
     description:
-      'Получить список домашних заданий. Можно фильтровать по периоду (today/tomorrow/week), конкретной дате, предмету или статусу выполнения.',
+      '[ШКОЛА] Получить список школьных домашних заданий. Фильтры: период (today/tomorrow/week), дата, предмет, статус выполнения.',
     parameters: z.object({
       period: z.enum(['today', 'tomorrow', 'week']).optional()
         .describe('Период: today — сегодня, tomorrow — завтра, week — текущая неделя'),
@@ -24,7 +24,7 @@ export const agentTools = {
   }),
 
   get_assignment_details: tool({
-    description: 'Получить детальную информацию о задании, включая описание и список вложенных файлов.',
+    description: '[ШКОЛА] Детали школьного задания: описание и вложенные файлы.',
     parameters: z.object({
       id: z.string().describe('UUID задания'),
     }),
@@ -32,7 +32,7 @@ export const agentTools = {
   }),
 
   toggle_assignment_completion: tool({
-    description: 'Отметить задание выполненным или снять отметку. Переключает текущий статус.',
+    description: '[ШКОЛА] Отметить школьное задание выполненным или снять отметку.',
     parameters: z.object({
       id: z.string().describe('UUID задания'),
     }),
@@ -40,7 +40,7 @@ export const agentTools = {
   }),
 
   get_schedule: tool({
-    description: 'Получить расписание уроков на неделю с домашними заданиями.',
+    description: '[ШКОЛА] Расписание уроков в школе на неделю с привязанными домашними заданиями.',
     parameters: z.object({
       week_offset: z.number().int().default(0)
         .describe('Смещение недели: 0 — текущая, 1 — следующая, -1 — прошлая'),
@@ -49,13 +49,13 @@ export const agentTools = {
   }),
 
   list_tutors: tool({
-    description: 'Получить список всех репетиторов с их предметами.',
+    description: '[РЕПЕТИТОРЫ] Список всех репетиторов и их предметов.',
     parameters: z.object({}),
     execute: () => exec.listTutors(),
   }),
 
   create_tutor: tool({
-    description: 'Добавить нового репетитора.',
+    description: '[РЕПЕТИТОРЫ] Добавить нового репетитора.',
     parameters: z.object({
       name: z.string().describe('Имя репетитора'),
       subjects: z.array(z.string()).optional().describe('Список предметов'),
@@ -64,7 +64,7 @@ export const agentTools = {
   }),
 
   update_tutor: tool({
-    description: 'Изменить имя репетитора.',
+    description: '[РЕПЕТИТОРЫ] Изменить имя репетитора.',
     parameters: z.object({
       id: z.string().describe('UUID репетитора'),
       name: z.string().describe('Новое имя'),
@@ -73,7 +73,7 @@ export const agentTools = {
   }),
 
   delete_tutor: tool({
-    description: 'Удалить репетитора и все его занятия.',
+    description: '[РЕПЕТИТОРЫ] Удалить репетитора и все его занятия.',
     parameters: z.object({
       id: z.string().describe('UUID репетитора'),
     }),
@@ -81,7 +81,7 @@ export const agentTools = {
   }),
 
   get_tutor_sessions: tool({
-    description: 'Получить занятия с репетиторами на неделю.',
+    description: '[РЕПЕТИТОРЫ] Получить занятия с репетиторами на неделю. НЕ школьное расписание.',
     parameters: z.object({
       week_offset: z.number().int().default(0)
         .describe('Смещение недели: 0 — текущая, 1 — следующая'),
@@ -90,7 +90,7 @@ export const agentTools = {
   }),
 
   create_tutor_session: tool({
-    description: 'Создать занятие с репетитором (разовое или регулярное). Можно передать tutor_id (UUID) или tutor_name (имя) — репетитор будет найден автоматически.',
+    description: '[РЕПЕТИТОРЫ] Создать занятие с репетитором (разовое или регулярное). Можно передать tutor_id (UUID) или tutor_name (имя) — репетитор будет найден автоматически.',
     parameters: z.object({
       tutor_id: z.string().optional().describe('UUID репетитора (если известен)'),
       tutor_name: z.string().optional().describe('Имя репетитора (например: Алексей). Используй, если UUID неизвестен'),
@@ -108,7 +108,7 @@ export const agentTools = {
   }),
 
   update_tutor_session: tool({
-    description: 'Изменить время начала или длительность занятия с репетитором.',
+    description: '[РЕПЕТИТОРЫ] Изменить время или длительность занятия с репетитором.',
     parameters: z.object({
       id: z.string().describe('UUID занятия'),
       time_start: z.string().regex(/^\d{2}:\d{2}$/).optional().describe('Новое время начала HH:MM'),
@@ -118,7 +118,7 @@ export const agentTools = {
   }),
 
   reschedule_tutor_session_once: tool({
-    description: 'Перенести одно конкретное занятие с репетитором на другую дату/время (остальные не затронуты).',
+    description: '[РЕПЕТИТОРЫ] Перенести одно занятие с репетитором на другую дату/время (остальные не затронуты).',
     parameters: z.object({
       session_id: z.string().describe('UUID регулярного занятия'),
       original_date: z.string().describe('Исходная дата занятия YYYY-MM-DD'),
@@ -129,7 +129,7 @@ export const agentTools = {
   }),
 
   delete_tutor_session: tool({
-    description: 'Удалить занятие с репетитором.',
+    description: '[РЕПЕТИТОРЫ] Удалить занятие с репетитором.',
     parameters: z.object({
       id: z.string().describe('UUID занятия'),
     }),
@@ -137,7 +137,7 @@ export const agentTools = {
   }),
 
   get_file_info: tool({
-    description: 'Получить информацию о файле-вложении задания, включая ссылку для скачивания.',
+    description: '[ФАЙЛЫ] Информация о файле-вложении задания и ссылка для скачивания.',
     parameters: z.object({
       attachment_id: z.string().describe('UUID вложения'),
     }),
@@ -145,7 +145,7 @@ export const agentTools = {
   }),
 
   trigger_scraper: tool({
-    description: 'Запустить парсинг домашних заданий из Google Classroom или Eljur.',
+    description: '[СЛУЖЕБНОЕ] Запустить парсинг школьных заданий из Google Classroom или Eljur.',
     parameters: z.object({
       source: z.enum(['google', 'eljur', 'all'])
         .describe('Источник: google, eljur или all (оба)'),

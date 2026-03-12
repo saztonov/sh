@@ -12,7 +12,9 @@ export const agentTools = {
       '[ШКОЛА] Получить список школьных домашних заданий (без вложений). Для получения вложений используй get_assignment_details. Фильтры: период (today/tomorrow/week), дата, предмет, статус выполнения.',
     parameters: z.object({
       period: z.enum(['today', 'tomorrow', 'week']).optional()
-        .describe('Период: today — сегодня, tomorrow — завтра, week — текущая неделя'),
+        .describe('Период: today — сегодня, tomorrow — завтра, week — неделя (используй week_offset для сдвига)'),
+      week_offset: z.number().int().default(0).optional()
+        .describe('Смещение недели (только при period=week): 0 — текущая, 1 — следующая, -1 — прошлая'),
       date: z.string().optional()
         .describe('Конкретная дата в формате YYYY-MM-DD'),
       subject: z.string().optional()

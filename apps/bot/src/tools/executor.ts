@@ -13,6 +13,7 @@ dayjs.extend(isoWeek);
 
 export async function getAssignments(args: {
   period?: 'today' | 'tomorrow' | 'week';
+  week_offset?: number;
   date?: string;       // YYYY-MM-DD
   subject?: string;
   is_completed?: boolean;
@@ -27,8 +28,9 @@ export async function getAssignments(args: {
   } else if (args.period === 'tomorrow') {
     query = query.eq('due_date', dayjs().add(1, 'day').format('YYYY-MM-DD'));
   } else if (args.period === 'week') {
-    const monday = dayjs().isoWeekday(1).format('YYYY-MM-DD');
-    const sunday = dayjs().isoWeekday(7).format('YYYY-MM-DD');
+    const offset = args.week_offset ?? 0;
+    const monday = dayjs().isoWeekday(1).add(offset, 'week').format('YYYY-MM-DD');
+    const sunday = dayjs().isoWeekday(1).add(offset, 'week').add(6, 'day').format('YYYY-MM-DD');
     query = query.gte('due_date', monday).lte('due_date', sunday);
   } else if (args.date) {
     query = query.eq('due_date', args.date);

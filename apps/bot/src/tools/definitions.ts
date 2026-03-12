@@ -137,7 +137,7 @@ export const agentTools = {
   }),
 
   get_file_info: tool({
-    description: '[ФАЙЛЫ] Информация о файле-вложении задания и ссылка для скачивания.',
+    description: '[ФАЙЛЫ] Получить ссылку для скачивания файла-вложения. Принимает UUID вложения из attachments[].id (полученного через get_assignment_details). Возвращает download_url.',
     parameters: z.object({
       attachment_id: z.string().describe('UUID вложения'),
     }),

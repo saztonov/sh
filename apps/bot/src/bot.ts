@@ -12,6 +12,7 @@ import { weekCommand } from './commands/week.js';
 import { scheduleCommand } from './commands/schedule.js';
 import { resetCommand } from './commands/reset.js';
 import { authorizeCommand } from './commands/authorize.js';
+import { authCallbackHandler } from './handlers/auth-callback.js';
 import { textHandler } from './handlers/text.js';
 
 export function createBot(): Bot {
@@ -30,6 +31,9 @@ export function createBot(): Bot {
   bot.command('schedule', scheduleCommand);
   bot.command('reset', resetCommand);
   bot.command('authorize', authorizeCommand);
+
+  // Inline button callbacks for authorization
+  bot.callbackQuery(/^auth_(approve|reject):\d+$/, authCallbackHandler);
 
   // Natural language text handler (must be registered after commands)
   bot.on('message:text', textHandler);

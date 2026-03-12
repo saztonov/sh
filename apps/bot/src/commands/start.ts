@@ -5,6 +5,7 @@
  * - Otherwise create a telegram_users record with is_authorized=false.
  */
 import type { CommandContext, Context } from 'grammy';
+import { InlineKeyboard } from 'grammy';
 import { config } from '../config.js';
 import { supabase } from '../db.js';
 import { logger } from '../logger.js';
@@ -61,6 +62,8 @@ export async function startCommand(ctx: CommandContext<Context>): Promise<void> 
     }
 
     await ctx.reply('Ваш запрос на доступ уже отправлен. Ожидайте подтверждения.');
+    // Re-send notification to admin in case they missed it
+    await notifyAdminAboutNewUser(ctx, telegramId, username);
     return;
   }
 
@@ -91,5 +94,29 @@ export async function startCommand(ctx: CommandContext<Context>): Promise<void> 
       'Добро пожаловать! Для доступа к боту необходима авторизация.\n' +
       'Ожидайте подтверждения.',
     );
+
+    // Notify admin with inline approve/reject buttons
+    await notifyAdminAboutNewUser(ctx, telegramId, username);
+  }
+}
+
+async function notifyAdminAboutNewUser(
+  ctx: CommandContext<Context>,
+  telegramId: number,
+  username: string | null,
+): Promise<void> {
+  try {
+    const displayName = username ? `@${username}` : `ID ${telegramId}`;
+    const keyboard = new InlineKeyboard()
+      .text('Подтвердить', `auth_approve:${telegramId}`)
+      .text('Отклонить', `auth_reject:${telegramId}`);
+
+    await ctx.api.sendMessage(
+      config.telegram.adminId,
+      `Новый запрос на доступ от ${displayName}`,
+      { reply_markup: keyboard },
+    );
+  } catch (err) {
+    logger.warn({ err, telegramId }, 'Failed to notify admin about new user');
   }
 }

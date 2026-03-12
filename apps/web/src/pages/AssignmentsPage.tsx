@@ -18,6 +18,7 @@ import {
   CalendarOutlined,
   FilterOutlined,
   ClearOutlined,
+  PaperClipOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
@@ -215,6 +216,15 @@ const AssignmentsPage: React.FC = () => {
                     style={{ borderRadius: 4, margin: 0, fontSize: 11 }}
                   >
                     {sourceLabel}
+                  </Tag>
+                )}
+
+                {(assignment.attachment_count?.[0]?.count ?? 0) > 0 && (
+                  <Tag
+                    icon={<PaperClipOutlined />}
+                    style={{ borderRadius: 4, margin: 0 }}
+                  >
+                    {assignment.attachment_count![0].count}
                   </Tag>
                 )}
               </Space>

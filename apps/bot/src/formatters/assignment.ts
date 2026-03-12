@@ -3,6 +3,13 @@
  */
 import dayjs from 'dayjs';
 import { DAY_NAMES } from '@homework/shared';
+import { getPresignedUrl } from '../s3.js';
+
+interface AttachmentRow {
+  id: string;
+  original_name: string;
+  s3_key: string;
+}
 
 interface AssignmentRow {
   id: string;
@@ -15,6 +22,7 @@ interface AssignmentRow {
     | { classroom_name: string; subject: string | null }
     | { classroom_name: string; subject: string | null }[]
     | null;
+  attachments?: AttachmentRow[] | null;
 }
 
 /**
@@ -49,11 +57,11 @@ function statusIcon(row: AssignmentRow): string {
  *      2 файла | Срок: 2 марта
  *      Done
  */
-export function formatAssignmentList(
+export async function formatAssignmentList(
   assignments: AssignmentRow[],
   date: string,
   label: string,
-): string {
+): Promise<string> {
   const d = dayjs(date);
   const jsDow = d.day();
   const dayNum = jsDow === 0 ? 7 : jsDow;
@@ -62,7 +70,8 @@ export function formatAssignmentList(
   const header = `\u{1F4DA} <b>Задания на ${label} (${d.format('D MMMM')}, ${dayName}):</b>\n`;
   const lines: string[] = [header];
 
-  assignments.forEach((a, i) => {
+  for (let i = 0; i < assignments.length; i++) {
+    const a = assignments[i];
     const subject = getSubject(a);
     const icon = statusIcon(a);
     const duePart = a.due_date
@@ -77,8 +86,23 @@ export function formatAssignmentList(
       lines.push(`   ${parts}`);
     }
     lines.push(`   ${icon} ${a.is_completed ? 'Выполнено' : statusText(a.status)}`);
+
+    // Attachment links
+    if (a.attachments && a.attachments.length > 0) {
+      const links: string[] = [];
+      for (const att of a.attachments) {
+        const url = await getPresignedUrl(att.s3_key, att.original_name);
+        if (url) {
+          links.push(`<a href="${url}">${escapeHtml(att.original_name)}</a>`);
+        }
+      }
+      if (links.length > 0) {
+        lines.push(`   \u{1F4CE} ${links.join(', ')}`);
+      }
+    }
+
     lines.push('');
-  });
+  }
 
   return lines.join('\n');
 }

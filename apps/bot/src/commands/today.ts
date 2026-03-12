@@ -24,7 +24,8 @@ export async function todayCommand(ctx: CommandContext<Context>): Promise<void> 
       due_raw,
       status,
       is_completed,
-      course:courses!inner(classroom_name, subject)
+      course:courses!inner(classroom_name, subject),
+      attachments(id, original_name, s3_key)
     `)
     .eq('course.is_active', true)
     .eq('due_date', today)
@@ -41,6 +42,6 @@ export async function todayCommand(ctx: CommandContext<Context>): Promise<void> 
     return;
   }
 
-  const message = formatAssignmentList(assignments, today, 'сегодня');
+  const message = await formatAssignmentList(assignments, today, 'сегодня');
   await ctx.reply(message, { parse_mode: 'HTML' });
 }

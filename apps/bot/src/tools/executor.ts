@@ -20,7 +20,7 @@ export async function getAssignments(args: {
 }) {
   let query = supabase
     .from('assignments')
-    .select('id, title, due_date, due_raw, status, is_completed, source, course:courses!inner(classroom_name, subject)')
+    .select('id, title, due_date, due_raw, status, is_completed, source, course:courses!inner(classroom_name, subject), attachments(id, original_name, s3_key)')
     .order('due_date', { ascending: true });
 
   if (args.period === 'today') {
@@ -45,7 +45,24 @@ export async function getAssignments(args: {
 
   const { data, error } = await query.limit(50);
   if (error) throw new Error(error.message);
-  return data ?? [];
+
+  // Generate presigned download URLs for attachments
+  const results = await Promise.all(
+    (data ?? []).map(async (a: any) => {
+      if (a.attachments && Array.isArray(a.attachments) && a.attachments.length > 0) {
+        a.attachments = await Promise.all(
+          a.attachments.map(async (att: { id: string; original_name: string; s3_key: string }) => ({
+            id: att.id,
+            original_name: att.original_name,
+            download_url: await getPresignedUrl(att.s3_key, att.original_name),
+          })),
+        );
+      }
+      return a;
+    }),
+  );
+
+  return results;
 }
 
 export async function getAssignmentDetails(args: { id: string }) {

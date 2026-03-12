@@ -18,6 +18,7 @@ import {
   FilePdfOutlined,
   FileImageOutlined,
   DownloadOutlined,
+  EyeOutlined,
   UserOutlined,
   TrophyOutlined,
   CalendarOutlined,
@@ -104,6 +105,16 @@ const AssignmentDrawer: React.FC<AssignmentDrawerProps> = ({ assignmentId, open,
             >
               Скачать
             </Button>
+            {(isImage || isPdf) && (
+              <Button
+                type="link"
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => window.open(attachment.s3_url, '_blank')}
+              >
+                Просмотр
+              </Button>
+            )}
           </Space>
 
           {/* Inline image preview */}

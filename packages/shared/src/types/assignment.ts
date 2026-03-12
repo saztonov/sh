@@ -24,6 +24,7 @@ export interface AssignmentWithCourse extends Assignment {
     classroom_name: string;
     subject: string | null;
   };
+  attachment_count?: [{ count: number }];
 }
 
 export interface AssignmentDetail extends AssignmentWithCourse {

@@ -19,7 +19,7 @@ export async function getAssignments(args: {
 }) {
   let query = supabase
     .from('assignments')
-    .select('id, title, due_date, due_raw, status, is_completed, source, course:courses(classroom_name, subject)')
+    .select('id, title, due_date, due_raw, status, is_completed, source, course:courses!inner(classroom_name, subject)')
     .order('due_date', { ascending: true });
 
   if (args.period === 'today') {
@@ -49,7 +49,7 @@ export async function getAssignments(args: {
 export async function getAssignmentDetails(args: { id: string }) {
   const { data, error } = await supabase
     .from('assignments')
-    .select('*, course:courses(classroom_name, subject), attachments(*)')
+    .select('*, course:courses!inner(classroom_name, subject), attachments(*)')
     .eq('id', args.id)
     .single();
   if (error) throw new Error(error.message);

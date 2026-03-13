@@ -35,7 +35,7 @@ export async function weekCommand(ctx: CommandContext<Context>): Promise<void> {
       status,
       is_completed,
       course:courses!inner(classroom_name, subject),
-      attachments(id, original_name, s3_key)
+      attachments(id, original_name, s3_url)
     `)
     .eq('course.is_active', true)
     .gte('due_date', mondayStr)
@@ -79,7 +79,7 @@ export async function weekCommand(ctx: CommandContext<Context>): Promise<void> {
     const dayName = DAY_NAMES[dayNum as keyof typeof DAY_NAMES] ?? '';
     const label = `${dayName}, ${d.format('D.MM')}`;
 
-    const block = await formatAssignmentList(dateAssignments, date, label);
+    const block = formatAssignmentList(dateAssignments, date, label);
     parts.push(block);
   }
 

@@ -5,7 +5,6 @@
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek.js';
 import { supabase } from '../db.js';
-import { getPresignedUrl } from '../s3.js';
 
 dayjs.extend(isoWeek);
 
@@ -20,7 +19,7 @@ export async function getAssignments(args: {
 }) {
   let query = supabase
     .from('assignments')
-    .select('id, title, due_date, due_raw, status, is_completed, source, course:courses!inner(classroom_name, subject), attachments(id, original_name, s3_key)')
+    .select('id, title, due_date, due_raw, status, is_completed, source, course:courses!inner(classroom_name, subject), attachments(id, original_name, s3_url)')
     .order('due_date', { ascending: true });
 
   if (args.period === 'today') {
@@ -46,23 +45,15 @@ export async function getAssignments(args: {
   const { data, error } = await query.limit(50);
   if (error) throw new Error(error.message);
 
-  // Generate presigned download URLs for attachments
-  const results = await Promise.all(
-    (data ?? []).map(async (a: any) => {
-      if (a.attachments && Array.isArray(a.attachments) && a.attachments.length > 0) {
-        a.attachments = await Promise.all(
-          a.attachments.map(async (att: { id: string; original_name: string; s3_key: string }) => ({
-            id: att.id,
-            original_name: att.original_name,
-            download_url: await getPresignedUrl(att.s3_key, att.original_name),
-          })),
-        );
-      }
-      return a;
-    }),
-  );
-
-  return results;
+  // Map attachments to use stored public S3 URL (no presigned generation)
+  return (data ?? []).map((a: any) => ({
+    ...a,
+    attachments: a.attachments?.map((att: any) => ({
+      id: att.id,
+      original_name: att.original_name,
+      download_url: att.s3_url,
+    })) ?? [],
+  }));
 }
 
 export async function getAssignmentDetails(args: { id: string }) {
@@ -73,16 +64,12 @@ export async function getAssignmentDetails(args: { id: string }) {
     .single();
   if (error) throw new Error(error.message);
 
-  // Generate presigned download URLs for each attachment
+  // Map attachments to use stored public S3 URL
   if (data.attachments && Array.isArray(data.attachments)) {
-    data.attachments = await Promise.all(
-      data.attachments.map(async (att: { s3_key?: string; original_name?: string; [key: string]: unknown }) => ({
-        ...att,
-        download_url: att.s3_key
-          ? await getPresignedUrl(att.s3_key, att.original_name ?? 'file')
-          : null,
-      })),
-    );
+    data.attachments = data.attachments.map((att: { s3_url?: string; original_name?: string; [key: string]: unknown }) => ({
+      ...att,
+      download_url: att.s3_url ?? null,
+    }));
   }
 
   return data;
@@ -305,16 +292,12 @@ export async function getFileInfo(args: { attachment_id: string }) {
     .single();
   if (error) throw new Error(error.message);
 
-  const download_url = data.s3_key
-    ? await getPresignedUrl(data.s3_key, data.original_name)
-    : null;
-
   return {
     id: data.id,
     original_name: data.original_name,
     mime_type: data.mime_type,
     size_bytes: data.size_bytes,
-    download_url,
+    download_url: data.s3_url ?? null,
     classroom_url: data.classroom_url,
   };
 }

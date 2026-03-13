@@ -25,7 +25,7 @@ export async function tomorrowCommand(ctx: CommandContext<Context>): Promise<voi
       status,
       is_completed,
       course:courses!inner(classroom_name, subject),
-      attachments(id, original_name, s3_key)
+      attachments(id, original_name, s3_url)
     `)
     .eq('course.is_active', true)
     .eq('due_date', tomorrow)
@@ -42,6 +42,6 @@ export async function tomorrowCommand(ctx: CommandContext<Context>): Promise<voi
     return;
   }
 
-  const message = await formatAssignmentList(assignments, tomorrow, 'завтра');
+  const message = formatAssignmentList(assignments, tomorrow, 'завтра');
   await ctx.reply(message, { parse_mode: 'HTML' });
 }

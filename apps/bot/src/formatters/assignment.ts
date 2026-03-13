@@ -3,12 +3,10 @@
  */
 import dayjs from 'dayjs';
 import { DAY_NAMES } from '@homework/shared';
-import { getPresignedUrl } from '../s3.js';
-
 interface AttachmentRow {
   id: string;
   original_name: string;
-  s3_key: string;
+  s3_url: string | null;
 }
 
 interface AssignmentRow {
@@ -57,11 +55,11 @@ function statusIcon(row: AssignmentRow): string {
  *      2 файла | Срок: 2 марта
  *      Done
  */
-export async function formatAssignmentList(
+export function formatAssignmentList(
   assignments: AssignmentRow[],
   date: string,
   label: string,
-): Promise<string> {
+): string {
   const d = dayjs(date);
   const jsDow = d.day();
   const dayNum = jsDow === 0 ? 7 : jsDow;
@@ -91,9 +89,8 @@ export async function formatAssignmentList(
     if (a.attachments && a.attachments.length > 0) {
       const links: string[] = [];
       for (const att of a.attachments) {
-        const url = await getPresignedUrl(att.s3_key, att.original_name);
-        if (url) {
-          links.push(`<a href="${url}">${escapeHtml(att.original_name)}</a>`);
+        if (att.s3_url) {
+          links.push(`<a href="${att.s3_url}">${escapeHtml(att.original_name)}</a>`);
         }
       }
       if (links.length > 0) {

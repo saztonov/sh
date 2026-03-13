@@ -93,36 +93,38 @@ const fileRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // All routes below require authentication
-  fastify.addHook('preHandler', authMiddleware);
+  // Authenticated routes in a separate encapsulation context
+  await fastify.register(async (authScope) => {
+    authScope.addHook('preHandler', authMiddleware);
 
-  /**
-   * GET /files/:attachmentId - JSON metadata (backwards compat)
-   */
-  fastify.get<{ Params: { attachmentId: string } }>(
-    '/files/:attachmentId',
-    async (request, reply) => {
-      const { attachmentId } = request.params;
+    /**
+     * GET /files/:attachmentId - JSON metadata (backwards compat)
+     */
+    authScope.get<{ Params: { attachmentId: string } }>(
+      '/files/:attachmentId',
+      async (request, reply) => {
+        const { attachmentId } = request.params;
 
-      const { data: attachment, error } = await supabase
-        .from('attachments')
-        .select('*')
-        .eq('id', attachmentId)
-        .single();
+        const { data: attachment, error } = await supabase
+          .from('attachments')
+          .select('*')
+          .eq('id', attachmentId)
+          .single();
 
-      if (error || !attachment) {
-        return reply.code(404).send({ error: 'Attachment not found' });
-      }
+        if (error || !attachment) {
+          return reply.code(404).send({ error: 'Attachment not found' });
+        }
 
-      const typed = attachment as Attachment;
+        const typed = attachment as Attachment;
 
-      return {
-        originalName: typed.original_name,
-        mimeType: typed.mime_type,
-        sizeBytes: typed.size_bytes,
-      };
-    },
-  );
+        return {
+          originalName: typed.original_name,
+          mimeType: typed.mime_type,
+          sizeBytes: typed.size_bytes,
+        };
+      },
+    );
+  });
 };
 
 export default fileRoutes;

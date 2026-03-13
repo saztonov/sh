@@ -3,10 +3,11 @@
  */
 import dayjs from 'dayjs';
 import { DAY_NAMES } from '@homework/shared';
+import { config } from '../config.js';
+
 interface AttachmentRow {
   id: string;
   original_name: string;
-  s3_url: string | null;
 }
 
 interface AssignmentRow {
@@ -85,13 +86,13 @@ export function formatAssignmentList(
     }
     lines.push(`   ${icon} ${a.is_completed ? 'Выполнено' : statusText(a.status)}`);
 
-    // Attachment links
+    // Attachment links via API proxy
     if (a.attachments && a.attachments.length > 0) {
+      const apiBase = config.apiUrl.replace(/\/+$/, '');
       const links: string[] = [];
       for (const att of a.attachments) {
-        if (att.s3_url) {
-          links.push(`<a href="${att.s3_url}">${escapeHtml(att.original_name)}</a>`);
-        }
+        const url = `${apiBase}/files/${att.id}/download`;
+        links.push(`<a href="${url}">${escapeHtml(att.original_name)}</a>`);
       }
       if (links.length > 0) {
         lines.push(`   \u{1F4CE} ${links.join(', ')}`);

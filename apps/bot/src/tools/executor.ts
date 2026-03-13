@@ -5,6 +5,7 @@
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek.js';
 import { supabase } from '../db.js';
+import { config } from '../config.js';
 
 dayjs.extend(isoWeek);
 
@@ -19,7 +20,7 @@ export async function getAssignments(args: {
 }) {
   let query = supabase
     .from('assignments')
-    .select('id, title, due_date, due_raw, status, is_completed, source, course:courses!inner(classroom_name, subject), attachments(id, original_name, s3_url)')
+    .select('id, title, due_date, due_raw, status, is_completed, source, course:courses!inner(classroom_name, subject), attachments(id, original_name)')
     .order('due_date', { ascending: true });
 
   if (args.period === 'today') {
@@ -45,13 +46,14 @@ export async function getAssignments(args: {
   const { data, error } = await query.limit(50);
   if (error) throw new Error(error.message);
 
-  // Map attachments to use stored public S3 URL (no presigned generation)
+  // Build download URLs via API proxy (Cloud.ru S3 doesn't support direct public access)
+  const apiBase = config.apiUrl.replace(/\/+$/, '');
   return (data ?? []).map((a: any) => ({
     ...a,
     attachments: a.attachments?.map((att: any) => ({
       id: att.id,
       original_name: att.original_name,
-      download_url: att.s3_url,
+      download_url: `${apiBase}/files/${att.id}/download`,
     })) ?? [],
   }));
 }
@@ -64,11 +66,12 @@ export async function getAssignmentDetails(args: { id: string }) {
     .single();
   if (error) throw new Error(error.message);
 
-  // Map attachments to use stored public S3 URL
+  // Build download URLs via API proxy
+  const apiBase = config.apiUrl.replace(/\/+$/, '');
   if (data.attachments && Array.isArray(data.attachments)) {
-    data.attachments = data.attachments.map((att: { s3_url?: string; original_name?: string; [key: string]: unknown }) => ({
+    data.attachments = data.attachments.map((att: any) => ({
       ...att,
-      download_url: att.s3_url ?? null,
+      download_url: `${apiBase}/files/${att.id}/download`,
     }));
   }
 
@@ -292,12 +295,13 @@ export async function getFileInfo(args: { attachment_id: string }) {
     .single();
   if (error) throw new Error(error.message);
 
+  const apiBase = config.apiUrl.replace(/\/+$/, '');
   return {
     id: data.id,
     original_name: data.original_name,
     mime_type: data.mime_type,
     size_bytes: data.size_bytes,
-    download_url: data.s3_url ?? null,
+    download_url: `${apiBase}/files/${data.id}/download`,
     classroom_url: data.classroom_url,
   };
 }

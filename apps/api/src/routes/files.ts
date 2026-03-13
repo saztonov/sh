@@ -44,12 +44,10 @@ const fileRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // All routes below require authentication
-  fastify.addHook('preHandler', authMiddleware);
-
   /**
-   * GET /files/:attachmentId/download - stream file from S3 through API
-   * Avoids presigned URL issues with Cloud.ru by proxying the download.
+   * GET /files/:attachmentId/download - proxy file from S3 through API.
+   * No auth required — attachment UUIDs are unguessable.
+   * Avoids presigned URL issues with Cloud.ru.
    */
   fastify.get<{ Params: { attachmentId: string } }>(
     '/files/:attachmentId/download',
@@ -94,6 +92,9 @@ const fileRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send(Buffer.from(bodyBytes));
     },
   );
+
+  // All routes below require authentication
+  fastify.addHook('preHandler', authMiddleware);
 
   /**
    * GET /files/:attachmentId - JSON metadata (backwards compat)

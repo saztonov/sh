@@ -27,6 +27,7 @@ export const config = {
     accessKey: optionalEnv('S3_ACCESS_KEY'),
     secretKey: optionalEnv('S3_SECRET_KEY'),
   },
+  apiUrl: requireEnv('API_URL'),   // e.g. https://your-domain.com/api
   telegram: {
     botToken: requireEnv('TELEGRAM_BOT_TOKEN'),
     adminId: parseInt(requireEnv('TELEGRAM_ADMIN_ID'), 10),

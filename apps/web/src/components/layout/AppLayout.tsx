@@ -12,6 +12,7 @@ import {
   MenuUnfoldOutlined,
   MenuOutlined,
   RobotOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useAuth } from '../../hooks/useAuth';
@@ -36,6 +37,11 @@ const baseMenuItems: MenuProps['items'] = [
     key: '/tutors',
     icon: <TeamOutlined />,
     label: 'Репетиторы',
+  },
+  {
+    key: '/difficulties',
+    icon: <WarningOutlined />,
+    label: 'Сложности',
   },
   {
     key: '/settings',

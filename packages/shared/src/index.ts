@@ -33,6 +33,13 @@ export type {
   TutorSessionResolved,
 } from './types/tutor.js';
 
+export type {
+  Difficulty,
+  DifficultyComment,
+  DifficultyAttachment,
+  DifficultyDetail,
+} from './types/difficulty.js';
+
 export type { UserProfile, UserRole } from './types/user.js';
 export { BANNED_PASSWORDS } from './types/user.js';
 

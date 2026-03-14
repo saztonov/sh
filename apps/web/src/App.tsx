@@ -8,6 +8,7 @@ import AssignmentsPage from './pages/AssignmentsPage';
 import SettingsPage from './pages/SettingsPage';
 import TutorsPage from './pages/TutorsPage';
 import ProfilePage from './pages/ProfilePage';
+import DifficultiesPage from './pages/DifficultiesPage';
 import AgentLogsPage from './pages/AgentLogsPage';
 import NotFoundPage from './pages/NotFoundPage';
 
@@ -29,6 +30,7 @@ const App: React.FC = () => {
         <Route path="schedule" element={<SchedulePage />} />
         <Route path="assignments" element={<AssignmentsPage />} />
         <Route path="tutors" element={<TutorsPage />} />
+        <Route path="difficulties" element={<DifficultiesPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="agent-logs" element={<AgentLogsPage />} />

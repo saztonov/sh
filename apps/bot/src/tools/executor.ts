@@ -285,6 +285,120 @@ export async function deleteTutorSession(args: { id: string }) {
   return { success: true };
 }
 
+// ── Difficulties ──────────────────────────────────────────────────────────────
+
+export async function getDifficulties(args: {
+  status?: 'unresolved' | 'resolved' | 'all';
+  subject?: string;
+}) {
+  let query = supabase
+    .from('difficulties')
+    .select('id, subject, title, comment, is_resolved, deadline, created_at')
+    .order('created_at', { ascending: false });
+
+  const status = args.status ?? 'unresolved';
+  if (status === 'unresolved') {
+    query = query.eq('is_resolved', false);
+  } else if (status === 'resolved') {
+    query = query.eq('is_resolved', true);
+  }
+
+  if (args.subject) {
+    query = query.eq('subject', args.subject);
+  }
+
+  const { data, error } = await query.limit(50);
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+export async function getDifficultyDetails(args: { id: string }) {
+  const { data: difficulty, error: diffError } = await supabase
+    .from('difficulties')
+    .select('*')
+    .eq('id', args.id)
+    .single();
+  if (diffError) throw new Error(diffError.message);
+
+  const { data: comments } = await supabase
+    .from('difficulty_comments')
+    .select('id, text, created_at')
+    .eq('difficulty_id', args.id)
+    .order('created_at', { ascending: true });
+
+  const { data: attachments } = await supabase
+    .from('difficulty_attachments')
+    .select('id, file_name, mime_type, size, created_at')
+    .eq('difficulty_id', args.id)
+    .order('created_at', { ascending: true });
+
+  return {
+    ...difficulty,
+    comments: comments ?? [],
+    attachments: attachments ?? [],
+  };
+}
+
+export async function createDifficulty(args: {
+  subject: string;
+  title: string;
+  comment?: string;
+  deadline?: string;
+}) {
+  const { data, error } = await supabase
+    .from('difficulties')
+    .insert({
+      subject: args.subject,
+      title: args.title,
+      comment: args.comment ?? null,
+      deadline: args.deadline ?? null,
+    })
+    .select('id, subject, title, deadline, created_at')
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function updateDifficulty(args: {
+  id: string;
+  subject?: string;
+  title?: string;
+  comment?: string;
+  deadline?: string;
+  is_resolved?: boolean;
+}) {
+  const { id, ...fields } = args;
+  const update: Record<string, unknown> = { ...fields, updated_at: new Date().toISOString() };
+
+  if (args.is_resolved === true) {
+    update.resolved_at = new Date().toISOString();
+  } else if (args.is_resolved === false) {
+    update.resolved_at = null;
+  }
+
+  const { data, error } = await supabase
+    .from('difficulties')
+    .update(update)
+    .eq('id', id)
+    .select('id, subject, title, is_resolved, deadline')
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function addDifficultyComment(args: {
+  difficulty_id: string;
+  text: string;
+}) {
+  const { data, error } = await supabase
+    .from('difficulty_comments')
+    .insert({ difficulty_id: args.difficulty_id, text: args.text })
+    .select('id, text, created_at')
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 // ── Files ──────────────────────────────────────────────────────────────────────
 
 export async function getFileInfo(args: { attachment_id: string }) {

@@ -138,6 +138,59 @@ export const agentTools = {
     execute: (args) => exec.deleteTutorSession(args),
   }),
 
+  get_difficulties: tool({
+    description:
+      '[СЛОЖНОСТИ] Получить список учебных сложностей/проблем. По умолчанию показывает только нерешённые. Можно фильтровать по предмету и статусу.',
+    parameters: z.object({
+      status: z.enum(['unresolved', 'resolved', 'all']).default('unresolved').optional()
+        .describe('Фильтр статуса: unresolved — нерешённые (по умолчанию), resolved — решённые, all — все'),
+      subject: z.string().optional()
+        .describe('Фильтр по предмету (например: Алгебра, Физика)'),
+    }),
+    execute: (args) => exec.getDifficulties(args),
+  }),
+
+  get_difficulty_details: tool({
+    description: '[СЛОЖНОСТИ] Детали сложности: полная информация, заметки (записная книжка) и вложения.',
+    parameters: z.object({
+      id: z.string().describe('UUID сложности'),
+    }),
+    execute: (args) => exec.getDifficultyDetails(args),
+  }),
+
+  create_difficulty: tool({
+    description: '[СЛОЖНОСТИ] Создать новую учебную сложность/проблему.',
+    parameters: z.object({
+      subject: z.string().describe('Предмет (например: Алгебра, Физика)'),
+      title: z.string().describe('Название проблемы'),
+      comment: z.string().optional().describe('Комментарий / подробности'),
+      deadline: z.string().optional().describe('Срок решения в формате YYYY-MM-DD'),
+    }),
+    execute: (args) => exec.createDifficulty(args),
+  }),
+
+  update_difficulty: tool({
+    description: '[СЛОЖНОСТИ] Обновить сложность: изменить данные или пометить решённой/нерешённой.',
+    parameters: z.object({
+      id: z.string().describe('UUID сложности'),
+      subject: z.string().optional().describe('Новый предмет'),
+      title: z.string().optional().describe('Новое название'),
+      comment: z.string().optional().describe('Новый комментарий'),
+      deadline: z.string().optional().describe('Новый срок решения YYYY-MM-DD'),
+      is_resolved: z.boolean().optional().describe('true — пометить решённой, false — вернуть в работу'),
+    }),
+    execute: (args) => exec.updateDifficulty(args),
+  }),
+
+  add_difficulty_comment: tool({
+    description: '[СЛОЖНОСТИ] Добавить заметку (комментарий) к сложности — как запись в записной книжке.',
+    parameters: z.object({
+      difficulty_id: z.string().describe('UUID сложности'),
+      text: z.string().describe('Текст заметки'),
+    }),
+    execute: (args) => exec.addDifficultyComment(args),
+  }),
+
   get_file_info: tool({
     description: '[ФАЙЛЫ] Получить ссылку для скачивания файла-вложения. Принимает UUID вложения из attachments[].id (полученного через get_assignment_details). Возвращает download_url.',
     parameters: z.object({

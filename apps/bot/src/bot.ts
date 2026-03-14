@@ -10,6 +10,8 @@ import { todayCommand } from './commands/today.js';
 import { tomorrowCommand } from './commands/tomorrow.js';
 import { weekCommand } from './commands/week.js';
 import { scheduleCommand } from './commands/schedule.js';
+import { nextweekCommand } from './commands/nextweek.js';
+import { unresolvedCommand } from './commands/unresolved.js';
 import { resetCommand } from './commands/reset.js';
 import { authorizeCommand } from './commands/authorize.js';
 import { authCallbackHandler } from './handlers/auth-callback.js';
@@ -29,6 +31,8 @@ export function createBot(): Bot {
   bot.command('tomorrow', tomorrowCommand);
   bot.command('week', weekCommand);
   bot.command('schedule', scheduleCommand);
+  bot.command('nextweek', nextweekCommand);
+  bot.command('unresolved', unresolvedCommand);
   bot.command('reset', resetCommand);
   bot.command('authorize', authorizeCommand);
 

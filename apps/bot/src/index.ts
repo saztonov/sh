@@ -24,6 +24,8 @@ async function main(): Promise<void> {
     { command: 'tomorrow', description: 'Задания на завтра' },
     { command: 'week', description: 'Задания на неделю' },
     { command: 'schedule', description: 'Расписание на сегодня' },
+    { command: 'nextweek', description: 'Задания на следующую неделю' },
+    { command: 'unresolved', description: 'Нерешённые сложности' },
   ]);
 
   // Graceful shutdown

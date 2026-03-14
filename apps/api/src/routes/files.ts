@@ -4,6 +4,7 @@ import { supabase } from '../db.js';
 import { s3 } from '../s3.js';
 import { config } from '../config.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { buildContentDisposition } from '../content-disposition.js';
 import type { Attachment } from '@homework/shared';
 
 const fileRoutes: FastifyPluginAsync = async (fastify) => {
@@ -79,7 +80,7 @@ const fileRoutes: FastifyPluginAsync = async (fastify) => {
       );
       reply.header(
         'Content-Disposition',
-        `attachment; filename*=UTF-8''${encodeURIComponent(typed.original_name)}`,
+        buildContentDisposition(typed.original_name),
       );
       if (s3Response.ContentLength) {
         reply.header('Content-Length', String(s3Response.ContentLength));

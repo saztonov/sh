@@ -1,6 +1,7 @@
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from './config.js';
+import { buildContentDisposition } from './content-disposition.js';
 
 export const s3 = new S3Client({
   endpoint: config.S3_ENDPOINT,
@@ -27,7 +28,7 @@ export async function getPresignedUrl(
     Bucket: config.S3_BUCKET,
     Key: key,
     ...(originalName && {
-      ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(originalName)}`,
+      ResponseContentDisposition: buildContentDisposition(originalName),
     }),
   });
 

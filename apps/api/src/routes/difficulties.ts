@@ -6,7 +6,7 @@ import { supabase } from '../db.js';
 import { s3 } from '../s3.js';
 import { config } from '../config.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { buildContentDisposition } from '../content-disposition.js';
+import { buildContentDisposition, resolveMimeType } from '../content-disposition.js';
 import type { Difficulty, DifficultyComment, DifficultyAttachment, DifficultyDetail } from '@homework/shared';
 
 const listQuerySchema = z.object({
@@ -338,7 +338,7 @@ const difficultyRoutes: FastifyPluginAsync = async (fastify) => {
 
       const s3Response = await s3.send(command);
 
-      reply.header('Content-Type', typed.mime_type || 'application/octet-stream');
+      reply.header('Content-Type', resolveMimeType(typed.mime_type, typed.file_name));
       reply.header(
         'Content-Disposition',
         buildContentDisposition(typed.file_name),

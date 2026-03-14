@@ -53,7 +53,7 @@ export async function getAssignments(args: {
     attachments: a.attachments?.map((att: any) => ({
       id: att.id,
       original_name: att.original_name,
-      download_url: `${apiBase}/files/${att.id}/download`,
+      download_url: `${apiBase}/files/${att.id}/download/${encodeURIComponent(att.original_name)}`,
     })) ?? [],
   }));
 }
@@ -71,7 +71,7 @@ export async function getAssignmentDetails(args: { id: string }) {
   if (data.attachments && Array.isArray(data.attachments)) {
     data.attachments = data.attachments.map((att: any) => ({
       ...att,
-      download_url: `${apiBase}/files/${att.id}/download`,
+      download_url: `${apiBase}/files/${att.id}/download/${encodeURIComponent(att.original_name)}`,
     }));
   }
 
@@ -415,7 +415,7 @@ export async function getFileInfo(args: { attachment_id: string }) {
     original_name: data.original_name,
     mime_type: data.mime_type,
     size_bytes: data.size_bytes,
-    download_url: `${apiBase}/files/${data.id}/download`,
+    download_url: `${apiBase}/files/${data.id}/download/${encodeURIComponent(data.original_name)}`,
     classroom_url: data.classroom_url,
   };
 }

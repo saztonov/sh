@@ -91,7 +91,7 @@ export function formatAssignmentList(
       const apiBase = config.apiUrl.replace(/\/+$/, '');
       const links: string[] = [];
       for (const att of a.attachments) {
-        const url = `${apiBase}/files/${att.id}/download`;
+        const url = `${apiBase}/files/${att.id}/download/${encodeURIComponent(att.original_name)}`;
         links.push(`<a href="${url}">${escapeHtml(att.original_name)}</a>`);
       }
       if (links.length > 0) {

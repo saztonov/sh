@@ -8,6 +8,7 @@
 import { config } from './config.js';
 import { logger } from './logger.js';
 import { createBot } from './bot.js';
+import { startScheduler, stopScheduler } from './services/notification-scheduler.js';
 
 async function main(): Promise<void> {
   logger.info(
@@ -28,9 +29,13 @@ async function main(): Promise<void> {
     { command: 'unresolved', description: 'Нерешённые сложности' },
   ]);
 
+  // Start notification scheduler
+  startScheduler(bot);
+
   // Graceful shutdown
   const shutdown = (): void => {
     logger.info('Shutting down bot...');
+    stopScheduler();
     bot.stop();
   };
 
